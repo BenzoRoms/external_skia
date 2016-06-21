@@ -100,7 +100,7 @@ protected:
 
         long totArea = 0;
         for (int i = 0; i < fCurRandRect; ++i) {
-            r = SkRect::MakeXYWH(SkIntToScalar(fRectLocations[i].fX), 
+            r = SkRect::MakeXYWH(SkIntToScalar(fRectLocations[i].fX),
                                  SkIntToScalar(fRectLocations[i].fY),
                                  SkIntToScalar((*fCurRects)[i].fWidth),
                                  SkIntToScalar((*fCurRects)[i].fHeight));
@@ -127,7 +127,7 @@ protected:
         str.printf("Press \'h\' to toggle rects");
         canvas->drawText(str.c_str(), str.size(), 50, kHeight + 150, blackBigFont);
 
-        this->inval(NULL);
+        this->inval(nullptr);
     }
 
 private:

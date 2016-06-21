@@ -13,6 +13,7 @@
 #include "GrTypes.h"
 
 #include "SkChecksum.h"
+#include "SkFixed.h"
 #include "SkPath.h"
 
 class GrPlot;
@@ -28,12 +29,10 @@ struct GrGlyph {
         kCoverage_MaskStyle,
         kDistance_MaskStyle
     };
-    
+
     typedef uint32_t PackedID;
 
-    // TODO either plot or AtlasID will be valid, not both
     GrBatchAtlas::AtlasID fID;
-    GrPlot*               fPlot;
     SkPath*               fPath;
     PackedID              fPackedID;
     GrMaskFormat          fMaskFormat;
@@ -43,8 +42,7 @@ struct GrGlyph {
 
     void init(GrGlyph::PackedID packed, const SkIRect& bounds, GrMaskFormat format) {
         fID = GrBatchAtlas::kInvalidAtlasID;
-        fPlot = NULL;
-        fPath = NULL;
+        fPath = nullptr;
         fPackedID = packed;
         fBounds.set(bounds);
         fMaskFormat = format;
@@ -52,10 +50,10 @@ struct GrGlyph {
         fTooLargeForAtlas = GrBatchAtlas::GlyphTooLargeForAtlas(bounds.width(), bounds.height());
     }
 
-    void free() {
+    void reset() {
         if (fPath) {
             delete fPath;
-            fPath = NULL;
+            fPath = nullptr;
         }
     }
 
@@ -89,7 +87,7 @@ struct GrGlyph {
     static inline MaskStyle UnpackMaskStyle(PackedID packed) {
         return ((packed >> 20) & 1) ? kDistance_MaskStyle : kCoverage_MaskStyle;
     }
-    
+
     static inline uint16_t UnpackID(PackedID packed) {
         return (uint16_t)packed;
     }

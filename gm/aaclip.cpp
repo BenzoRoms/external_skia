@@ -105,7 +105,7 @@ private:
     typedef skiagm::GM INHERITED;
 };
 
-DEF_GM( return SkNEW(AAClipGM); )
+DEF_GM(return new AAClipGM;)
 
 /////////////////////////////////////////////////////////////////////////
 
@@ -118,7 +118,7 @@ static SkCanvas* make_canvas(const SkBitmap& bm) {
                                             (SkPMColor*)bm.getPixels(),
                                             bm.rowBytes());
     } else {
-        return SkNEW_ARGS(SkCanvas, (bm));
+        return new SkCanvas(bm);
     }
 }
 
@@ -140,7 +140,7 @@ static void test_image(SkCanvas* canvas, const SkImageInfo& info) {
     newc->drawCircle(50, 50, 49, paint);
     canvas->drawBitmap(bm, 10, 10);
 
-    CGImageRef image = SkCreateCGImageRefWithColorspace(bm, NULL);
+    CGImageRef image = SkCreateCGImageRefWithColorspace(bm, nullptr);
 
     SkBitmap bm2;
     SkCreateBitmapFromCGImage(&bm2, image);
@@ -190,13 +190,13 @@ private:
 };
 
 #if 0 // Disabled pending fix from reed@
-DEF_GM( return SkNEW(CGImageGM); )
+DEF_GM( return new CGImageGM; )
 #endif
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-// skbug.com/3716
+// https://bug.skia.org/3716
 class ClipCubicGM : public skiagm::GM {
     const SkScalar W = 100;
     const SkScalar H = 240;
@@ -206,7 +206,7 @@ public:
     ClipCubicGM() {
         fVPath.moveTo(W, 0);
         fVPath.cubicTo(W, H-10, 0, 10, 0, H);
-    
+
         SkMatrix pivot;
         pivot.setRotate(90, W/2, H/2);
         fVPath.transform(pivot, &fHPath);
@@ -216,7 +216,7 @@ protected:
     SkString onShortName() override {
         return SkString("clipcubic");
     }
-    
+
     SkISize onISize() override {
         return SkISize::Make(400, 410);
     }
@@ -224,10 +224,10 @@ protected:
     void doDraw(SkCanvas* canvas, const SkPath& path) {
         SkPaint paint;
         paint.setAntiAlias(true);
-        
-        paint.setColor(0xFFCCCCCC);
+
+        paint.setColor(sk_tool_utils::color_to_565(0xFFCCCCCC));
         canvas->drawPath(path, paint);
-        
+
         paint.setColor(SK_ColorRED);
         paint.setStyle(SkPaint::kStroke_Style);
         canvas->drawPath(path, paint);
@@ -238,11 +238,11 @@ protected:
 
         SkRect r = SkRect::MakeXYWH(0, H/4, W, H/2);
         SkPaint paint;
-        paint.setColor(0xFF8888FF);
+        paint.setColor(sk_tool_utils::color_to_565(0xFF8888FF));
 
         canvas->drawRect(r, paint);
         this->doDraw(canvas, path);
-        
+
         canvas->translate(dx, dy);
 
         canvas->drawRect(r, paint);
@@ -256,9 +256,8 @@ protected:
         canvas->translate(0, 200);
         this->drawAndClip(canvas, fHPath, 200, 0);
     }
-    
+
 private:
     typedef skiagm::GM INHERITED;
 };
-DEF_GM( return SkNEW(ClipCubicGM); )
-
+DEF_GM(return new ClipCubicGM;)

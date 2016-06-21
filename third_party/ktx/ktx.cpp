@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2014 Google Inc.
  *
@@ -21,20 +20,20 @@ static inline uint32_t compressed_fmt_to_gl_define(SkTextureCompressor::Format f
         GR_GL_COMPRESSED_LUMINANCE_LATC1,      // kLATC_Format
         GR_GL_COMPRESSED_R11_EAC,              // kR11_EAC_Format
         GR_GL_COMPRESSED_ETC1_RGB8,            // kETC1_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_4x4_KHR,    // kASTC_4x4_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_5x4_KHR,    // kASTC_5x4_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_5x5_KHR,    // kASTC_5x5_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_6x5_KHR,    // kASTC_6x5_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_6x6_KHR,    // kASTC_6x6_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_8x5_KHR,    // kASTC_8x5_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_8x6_KHR,    // kASTC_8x6_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_8x8_KHR,    // kASTC_8x8_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_10x5_KHR,   // kASTC_10x5_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_10x6_KHR,   // kASTC_10x6_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_10x8_KHR,   // kASTC_10x8_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_10x10_KHR,  // kASTC_10x10_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_12x10_KHR,  // kASTC_12x10_Format
-        GR_GL_COMPRESSED_RGBA_ASTC_12x12_KHR,  // kASTC_12x12_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_4x4,        // kASTC_4x4_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_5x4,        // kASTC_5x4_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_5x5,        // kASTC_5x5_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_6x5,        // kASTC_6x5_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_6x6,        // kASTC_6x6_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_8x5,        // kASTC_8x5_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_8x6,        // kASTC_8x6_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_8x8,        // kASTC_8x8_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_10x5,       // kASTC_10x5_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_10x6,       // kASTC_10x6_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_10x8,       // kASTC_10x8_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_10x10,      // kASTC_10x10_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_12x10,      // kASTC_12x10_Format
+        GR_GL_COMPRESSED_RGBA_ASTC_12x12,      // kASTC_12x12_Format
     };
 
     GR_STATIC_ASSERT(0 == SkTextureCompressor::kLATC_Format);
@@ -328,7 +327,7 @@ bool SkKTXFile::readKTXFile(const uint8_t* data, size_t dataLen) {
                 }
             }
         }
-        
+
         uint32_t imgSizePadded = (imgSize + 3) & ~3;
         buf += imgSizePadded;
         bytesLeft -= imgSizePadded;
@@ -337,8 +336,9 @@ bool SkKTXFile::readKTXFile(const uint8_t* data, size_t dataLen) {
     return bytesLeft == 0;
 }
 
-bool SkKTXFile::is_ktx(const uint8_t *data) {
-    return 0 == memcmp(KTX_FILE_IDENTIFIER, data, KTX_FILE_IDENTIFIER_SIZE);
+bool SkKTXFile::is_ktx(const uint8_t data[], size_t size) {
+    return size >= KTX_FILE_IDENTIFIER_SIZE &&
+           0 == memcmp(KTX_FILE_IDENTIFIER, data, KTX_FILE_IDENTIFIER_SIZE);
 }
 
 bool SkKTXFile::is_ktx(SkStreamRewindable* stream) {
@@ -350,7 +350,7 @@ bool SkKTXFile::is_ktx(SkStreamRewindable* stream) {
     if (!largeEnough) {
         return false;
     }
-    return is_ktx(buf);
+    return is_ktx(buf, KTX_FILE_IDENTIFIER_SIZE);
 }
 
 SkKTXFile::KeyValue SkKTXFile::CreateKeyValue(const char *cstrKey, const char *cstrValue) {
@@ -380,7 +380,7 @@ bool SkKTXFile::WriteETC1ToKTX(SkWStream* stream, const uint8_t *etc1Data,
     if (!stream->write(&kKTX_ENDIANNESS_CODE, 4)) {
         return false;
     }
-    
+
     Header hdr;
     hdr.fGLType = 0;
     hdr.fGLTypeSize = 1;
@@ -554,6 +554,6 @@ bool SkKTXFile::WriteBitmapToKTX(SkWStream* stream, const SkBitmap& bitmap) {
             rowPtr += bitmap.rowBytes();
         }
     }
-    
+
     return true;
 }

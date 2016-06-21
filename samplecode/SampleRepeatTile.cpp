@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -37,8 +36,7 @@ static void make_paint(SkPaint* paint, SkShader::TileMode tm) {
     SkBitmap bm;
     make_bitmap(&bm);
 
-    SkShader* shader = SkShader::CreateBitmapShader(bm, tm, tm);
-    paint->setShader(shader)->unref();
+    paint->setShader(SkShader::MakeBitmapShader(bm, tm, tm));
 }
 
 class RepeatTileView : public SampleView {
@@ -67,7 +65,7 @@ protected:
     }
 
     SkView::Click* onFindClickHandler(SkScalar x, SkScalar y, unsigned modi) override {
-        this->inval(NULL);
+        this->inval(nullptr);
 
         return this->INHERITED::onFindClickHandler(x, y, modi);
     }
@@ -77,7 +75,7 @@ protected:
     }
 
     virtual bool handleKey(SkKey) {
-        this->inval(NULL);
+        this->inval(nullptr);
         return true;
     }
 

@@ -5,6 +5,7 @@
  * found in the LICENSE file.
  */
 
+#include "SkImage.h"
 #include "SkPDFBitmap.h"
 #include "SkPDFCanon.h"
 #include "SkPDFFont.h"
@@ -25,8 +26,9 @@ void SkPDFCanon::reset() {
     fImageShaderRecords.reset();
     fGraphicStateRecords.foreach ([](WrapGS w) { w.fPtr->unref(); });
     fGraphicStateRecords.reset();
-    fBitmapRecords.unrefAll();
-    fBitmapRecords.reset();
+
+    fPDFBitmapMap.foreach([](SkBitmapKey, SkPDFObject** p) { (*p)->unref(); });
+    fPDFBitmapMap.reset();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -41,7 +43,7 @@ T* find_item(const SkTDArray<T*>& ptrArray, const U& object) {
             return ptrArray[i];
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -51,7 +53,7 @@ SkPDFFont* SkPDFCanon::findFont(uint32_t fontID,
                                 SkPDFFont** relatedFontPtr) const {
     SkASSERT(relatedFontPtr);
 
-    SkPDFFont* relatedFont = NULL;
+    SkPDFFont* relatedFont = nullptr;
     for (int i = 0; i < fFontRecords.count(); ++i) {
         SkPDFFont::Match match = SkPDFFont::IsMatch(
                 fFontRecords[i].fFont, fFontRecords[i].fFontID,
@@ -62,8 +64,8 @@ SkPDFFont* SkPDFCanon::findFont(uint32_t fontID,
             relatedFont = fFontRecords[i].fFont;
         }
     }
-    *relatedFontPtr = relatedFont;  // May still be NULL.
-    return NULL;
+    *relatedFontPtr = relatedFont;  // May still be nullptr.
+    return nullptr;
 }
 
 void SkPDFCanon::addFont(SkPDFFont* font, uint32_t fontID, uint16_t fGlyphID) {
@@ -109,7 +111,7 @@ void SkPDFCanon::addImageShader(SkPDFImageShader* pdfShader) {
 const SkPDFGraphicState* SkPDFCanon::findGraphicState(
         const SkPDFGraphicState& key) const {
     const WrapGS* ptr = fGraphicStateRecords.find(WrapGS(&key));
-    return ptr ? ptr->fPtr : NULL;
+    return ptr ? ptr->fPtr : nullptr;
 }
 
 void SkPDFCanon::addGraphicState(const SkPDFGraphicState* state) {
@@ -121,10 +123,35 @@ void SkPDFCanon::addGraphicState(const SkPDFGraphicState* state) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-SkPDFBitmap* SkPDFCanon::findBitmap(const SkBitmap& bm) const {
-    return find_item(fBitmapRecords, bm);
+sk_sp<SkPDFObject> SkPDFCanon::findPDFBitmap(SkBitmapKey key) const {
+    SkPDFObject** ptr = fPDFBitmapMap.find(key);
+    return ptr ? sk_ref_sp(*ptr) : sk_sp<SkPDFObject>();
 }
 
-void SkPDFCanon::addBitmap(SkPDFBitmap* pdfBitmap) {
-    fBitmapRecords.push(SkRef(pdfBitmap));
+void SkPDFCanon::addPDFBitmap(SkBitmapKey key, sk_sp<SkPDFObject> pdfBitmap) {
+    fPDFBitmapMap.set(key, pdfBitmap.release());
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+sk_sp<SkPDFStream> SkPDFCanon::makeInvertFunction() {
+    if (fInvertFunction) {
+        return fInvertFunction;
+    }
+    fInvertFunction = SkPDFGraphicState::MakeInvertFunction();
+    return fInvertFunction;
+}
+sk_sp<SkPDFDict> SkPDFCanon::makeNoSmaskGraphicState() {
+    if (fNoSmaskGraphicState) {
+        return fNoSmaskGraphicState;
+    }
+    fNoSmaskGraphicState = SkPDFGraphicState::MakeNoSmaskGraphicState();
+    return fNoSmaskGraphicState;
+}
+sk_sp<SkPDFArray> SkPDFCanon::makeRangeObject() {
+    if (fRangeObject) {
+        return fRangeObject;
+    }
+    fRangeObject = SkPDFShader::MakeRangeObject();
+    return fRangeObject;
 }

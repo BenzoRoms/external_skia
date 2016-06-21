@@ -9,11 +9,10 @@
 #ifndef SkRTConf_DEFINED
 #define SkRTConf_DEFINED
 
+#include "../private/SkTDArray.h"
+#include "../private/SkTDict.h"
 #include "SkString.h"
 #include "SkStream.h"
-
-#include "SkTDict.h"
-#include "SkTArray.h"
 
 /** \class SkRTConfBase
     Non-templated base class for the runtime configs
@@ -50,7 +49,7 @@ protected:
     SkString fDescription;
 };
 
-#ifdef SK_DEVELOPER
+#ifdef SK_DEBUG
 #define SK_CONF_DECLARE(confType, varName, confName, defaultValue, description) static SkRTConf<confType> varName(confName, defaultValue, description)
 #define SK_CONF_SET(confname, value) \
     skRTConfRegistry().set(confname, value, true)

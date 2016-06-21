@@ -6,7 +6,6 @@
  */
 
 #include "SkCachedData.h"
-#include "SkRefCnt.h"
 #include "SkDiscardableMemory.h"
 
 //#define TRACK_CACHEDDATA_LIFETIME
@@ -58,7 +57,7 @@ SkCachedData::~SkCachedData() {
             sk_free(fStorage.fMalloc);
             break;
         case kDiscardableMemory_StorageType:
-            SkDELETE(fStorage.fDM);
+            delete fStorage.fDM;
             break;
     }
     dec();
@@ -89,7 +88,7 @@ void SkCachedData::internalRef(bool fromCache) const {
 void SkCachedData::internalUnref(bool fromCache) const {
     if (AutoMutexWritable(this)->inMutexUnref(fromCache)) {
         // can't delete inside doInternalUnref, since it is locking a mutex (which we own)
-        SkDELETE(this);
+        delete this;
     }
 }
 
@@ -99,7 +98,7 @@ void SkCachedData::inMutexRef(bool fromCache) {
     if ((1 == fRefCnt) && fInCache) {
         this->inMutexLock();
     }
-    
+
     fRefCnt += 1;
     if (fromCache) {
         SkASSERT(!fInCache);
@@ -126,22 +125,22 @@ bool SkCachedData::inMutexUnref(bool fromCache) {
         default:
             break;
     }
-    
+
     if (fromCache) {
         SkASSERT(fInCache);
         fInCache = false;
     }
-    
+
     // return true when we need to be deleted
     return 0 == fRefCnt;
 }
 
 void SkCachedData::inMutexLock() {
     fMutex.assertHeld();
-    
+
     SkASSERT(!fIsLocked);
     fIsLocked = true;
-    
+
     switch (fStorageType) {
         case kMalloc_StorageType:
             this->setData(fStorage.fMalloc);
@@ -152,7 +151,7 @@ void SkCachedData::inMutexLock() {
                 SkASSERT(ptr);
                 this->setData(ptr);
             } else {
-                this->setData(NULL);   // signal failure to lock, contents are gone
+                this->setData(nullptr);   // signal failure to lock, contents are gone
             }
             break;
     }
@@ -160,10 +159,10 @@ void SkCachedData::inMutexLock() {
 
 void SkCachedData::inMutexUnlock() {
     fMutex.assertHeld();
-    
+
     SkASSERT(fIsLocked);
     fIsLocked = false;
-    
+
     switch (fStorageType) {
         case kMalloc_StorageType:
             // nothing to do/check
@@ -174,7 +173,7 @@ void SkCachedData::inMutexUnlock() {
             }
             break;
     }
-    this->setData(NULL);   // signal that we're in an unlocked state
+    this->setData(nullptr);   // signal that we're in an unlocked state
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -193,7 +192,7 @@ void SkCachedData::validate() const {
         }
     } else {
         SkASSERT((fInCache && 1 == fRefCnt) || (0 == fRefCnt));
-        SkASSERT(NULL == fData);
+        SkASSERT(nullptr == fData);
     }
 }
 #endif

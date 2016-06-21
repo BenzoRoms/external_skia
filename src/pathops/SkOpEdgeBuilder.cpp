@@ -199,13 +199,13 @@ bool SkOpEdgeBuilder::walk(SkChunkAlloc* allocator) {
                 fCurrentContour->addConic(pointsPtr, *weightPtr++, fAllocator);
                 break;
             case SkPath::kCubic_Verb: {
-                // split self-intersecting cubics in two before proceeding
-                // if the cubic is convex, it doesn't self intersect.
-                SkScalar loopT;
-                SkDCubic::CubicType cubicType;
-                if (SkDCubic::ComplexBreak(pointsPtr, &loopT, &cubicType)) {
-                    SkPoint cubicPair[7]; 
-                    SkChopCubicAt(pointsPtr, cubicPair, loopT);
+                // Split complex cubics (such as self-intersecting curves or
+                // ones with difficult curvature) in two before proceeding.
+                // This can be required for intersection to succeed.
+                SkScalar splitT;
+                if (SkDCubic::ComplexBreak(pointsPtr, &splitT)) {
+                    SkPoint cubicPair[7];
+                    SkChopCubicAt(pointsPtr, cubicPair, splitT);
                     if (!SkScalarsAreFinite(&cubicPair[0].fX, SK_ARRAY_COUNT(cubicPair) * 2)) {
                         return false;
                     }
@@ -221,8 +221,8 @@ bool SkOpEdgeBuilder::walk(SkChunkAlloc* allocator) {
                         for (int index = 0; index < SkPathOpsVerbToPoints(v2); ++index) {
                             force_small_to_zero(&curve2[index]);
                         }
-                        fCurrentContour->addCurve(v1, curve1, fAllocator)->setCubicType(cubicType);
-                        fCurrentContour->addCurve(v2, curve2, fAllocator)->setCubicType(cubicType);
+                        fCurrentContour->addCurve(v1, curve1, fAllocator);
+                        fCurrentContour->addCurve(v2, curve2, fAllocator);
                     } else {
                         fCurrentContour->addCubic(pointsPtr, fAllocator);
                     }

@@ -33,12 +33,13 @@ static void doDraw(SkCanvas* canvas, const SkPaint& paint, const char text[]) {
 
 static bool do_surface(int w, int h, const char path[], const char text[],
                        const SkPaint& paint) {
-    SkAutoTUnref<SkSurface> surface(SkSurface::NewRasterN32Premul(w, h));
+    SkSurfaceProps props(0, kUnknown_SkPixelGeometry);
+    sk_sp<SkSurface> surface(SkSurface::MakeRasterN32Premul(w, h, &props));
     doDraw(surface->getCanvas(), paint, text);
 
-    SkAutoTUnref<SkImage> image(surface->newImageSnapshot());
+    sk_sp<SkImage> image(surface->makeImageSnapshot());
     SkAutoDataUnref data(image->encode());
-    if (NULL == data.get()) {
+    if (nullptr == data.get()) {
         return false;
     }
     SkFILEWStream stream(path);
@@ -47,11 +48,11 @@ static bool do_surface(int w, int h, const char path[], const char text[],
 
 static bool do_document(int w, int h, const char path[], const char text[],
                         const SkPaint& paint) {
-    SkAutoTUnref<SkDocument> doc(SkDocument::CreatePDF(path));
+    sk_sp<SkDocument> doc(SkDocument::MakePDF(path));
     if (doc.get()) {
         SkScalar width = SkIntToScalar(w);
         SkScalar height = SkIntToScalar(h);
-        doDraw(doc->beginPage(width, height, NULL), paint, text);
+        doDraw(doc->beginPage(width, height, nullptr), paint, text);
         return true;
     }
     return false;

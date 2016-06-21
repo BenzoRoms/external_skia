@@ -11,7 +11,6 @@
 #include "SkBitmapProcState.h"
 #include "SkBitmapScaler.h"
 #include "SkGradientShader.h"
-#include "SkImageDecoder.h"
 #include "SkImageEncoder.h"
 #include "SkStream.h"
 #include "SkTypeface.h"
@@ -62,7 +61,7 @@ public:
     SkString    fName;
 
     FilterIndiaBoxGM() {
-        this->setBGColor(0xFFDDDDDD);
+        this->setBGColor(sk_tool_utils::color_to_565(0xFFDDDDDD));
     }
 
     FilterIndiaBoxGM(const char filename[]) : fFilename(filename) {
@@ -99,21 +98,11 @@ protected:
       }
 
       void makeBitmap() {
-          SkImageDecoder* codec = NULL;
-          SkString resourcePath = GetResourcePath(fFilename.c_str());
-          SkFILEStream stream(resourcePath.c_str());
-          if (stream.isValid()) {
-              codec = SkImageDecoder::Factory(&stream);
-          }
-          if (codec) {
-              stream.rewind();
-              codec->decode(&stream, &fBM, kN32_SkColorType, SkImageDecoder::kDecodePixels_Mode);
-              SkDELETE(codec);
-          } else {
-              fBM.allocN32Pixels(1, 1);
-              *(fBM.getAddr32(0,0)) = 0xFF0000FF; // red == bad
-          }
-          fSize = fBM.height();
+        if (!GetResourceAsBitmap(fFilename.c_str(), &fBM)) {
+            fBM.allocN32Pixels(1, 1);
+            fBM.eraseARGB(255, 255, 0 , 0); // red == bad
+        }
+        fSize = fBM.height();
       }
   private:
     typedef skiagm::GM INHERITED;

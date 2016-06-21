@@ -10,7 +10,7 @@
 
 #include "gl/GrGLInterface.h"
 #include "GrGLDefines.h"
-#include "GrStencil.h"
+#include "GrStencilSettings.h"
 
 class SkMatrix;
 
@@ -18,14 +18,18 @@ class SkMatrix;
 
 typedef uint32_t GrGLVersion;
 typedef uint32_t GrGLSLVersion;
+typedef uint32_t GrGLDriverVersion;
 
 #define GR_GL_VER(major, minor) ((static_cast<int>(major) << 16) | \
                                  static_cast<int>(minor))
 #define GR_GLSL_VER(major, minor) ((static_cast<int>(major) << 16) | \
                                    static_cast<int>(minor))
+#define GR_GL_DRIVER_VER(major, minor) ((static_cast<int>(major) << 16) | \
+                                        static_cast<int>(minor))
 
 #define GR_GL_INVALID_VER GR_GL_VER(0, 0)
-#define GR_GLSL_INVALID_VER GR_GL_VER(0, 0)
+#define GR_GLSL_INVALID_VER GR_GLSL_VER(0, 0)
+#define GR_GL_DRIVER_UNKNOWN_VER GR_GL_DRIVER_VER(0, 0)
 
 /**
  * The Vendor and Renderer enum values are lazily updated as required.
@@ -47,7 +51,17 @@ enum GrGLRenderer {
     kPowerVRRogue_GrGLRenderer,
     kAdreno3xx_GrGLRenderer,
     kAdreno4xx_GrGLRenderer,
+    kOSMesa_GrGLRenderer,
     kOther_GrGLRenderer
+};
+
+enum GrGLDriver {
+    kMesa_GrGLDriver,
+    kChromium_GrGLDriver,
+    kNVIDIA_GrGLDriver,
+    kIntel_GrGLDriver,
+    kANGLE_GrGLDriver,
+    kUnknown_GrGLDriver
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -66,6 +80,12 @@ enum GrGLRenderer {
     do {                                                                       \
         *(p) = GR_GL_INIT_ZERO;                                                \
         GR_GL_CALL(gl, GetFramebufferAttachmentParameteriv(t, a, pname, p));   \
+    } while (0)
+
+#define GR_GL_GetNamedFramebufferAttachmentParameteriv(gl, fb, a, pname, p)          \
+    do {                                                                             \
+        *(p) = GR_GL_INIT_ZERO;                                                      \
+        GR_GL_CALL(gl, GetNamedFramebufferAttachmentParameteriv(fb, a, pname, p));   \
     } while (0)
 
 #define GR_GL_GetRenderbufferParameteriv(gl, t, pname, p)                      \
@@ -98,10 +118,15 @@ enum GrGLRenderer {
 GrGLVersion GrGLGetVersionFromString(const char* versionString);
 GrGLStandard GrGLGetStandardInUseFromString(const char* versionString);
 GrGLSLVersion GrGLGetGLSLVersionFromString(const char* versionString);
-bool GrGLIsMesaFromVersionString(const char* versionString);
 GrGLVendor GrGLGetVendorFromString(const char* vendorString);
 GrGLRenderer GrGLGetRendererFromString(const char* rendererString);
-bool GrGLIsChromiumFromRendererString(const char* rendererString);
+
+void GrGLGetDriverInfo(GrGLStandard standard,
+                       GrGLVendor vendor,
+                       const char* rendererString,
+                       const char* versionString,
+                       GrGLDriver* outDriver,
+                       GrGLDriverVersion* outVersion);
 
 // these variants call glGetString()
 GrGLVersion GrGLGetVersion(const GrGLInterface*);
@@ -119,11 +144,6 @@ void GrGLCheckErr(const GrGLInterface* gl,
                   const char* call);
 
 void GrGLClearErr(const GrGLInterface* gl);
-
-/**
- * Helper for converting SkMatrix to a column-major GL float array
- */
-template<int MatrixSize> void GrGLGetMatrix(GrGLfloat* dest, const SkMatrix& src);
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -153,13 +173,6 @@ template<int MatrixSize> void GrGLGetMatrix(GrGLfloat* dest, const SkMatrix& src
     #define GR_GL_LOG_CALLS_IMPL(X)
 #endif
 
-// internal macro that does the per-GL-call callback (if necessary)
-#if GR_GL_PER_GL_FUNC_CALLBACK
-    #define GR_GL_CALLBACK_IMPL(IFACE) (IFACE)->fCallback(IFACE)
-#else
-    #define GR_GL_CALLBACK_IMPL(IFACE)
-#endif
-
 // makes a GL call on the interface and does any error checking and logging
 #define GR_GL_CALL(IFACE, X)                                    \
     do {                                                        \
@@ -171,7 +184,6 @@ template<int MatrixSize> void GrGLGetMatrix(GrGLfloat* dest, const SkMatrix& src
 // the caller wants to do its own glGetError() call and examine the error value.
 #define GR_GL_CALL_NOERRCHECK(IFACE, X)                         \
     do {                                                        \
-        GR_GL_CALLBACK_IMPL(IFACE);                             \
         (IFACE)->fFunctions.f##X;                               \
         GR_GL_LOG_CALLS_IMPL(X);                                \
     } while (false)
@@ -186,7 +198,6 @@ template<int MatrixSize> void GrGLGetMatrix(GrGLfloat* dest, const SkMatrix& src
 // same as GR_GL_CALL_RET but always skips the error check.
 #define GR_GL_CALL_RET_NOERRCHECK(IFACE, RET, X)                \
     do {                                                        \
-        GR_GL_CALLBACK_IMPL(IFACE);                             \
         (RET) = (IFACE)->fFunctions.f##X;                       \
         GR_GL_LOG_CALLS_IMPL(X);                                \
     } while (false)
@@ -194,7 +205,7 @@ template<int MatrixSize> void GrGLGetMatrix(GrGLfloat* dest, const SkMatrix& src
 // call glGetError without doing a redundant error check or logging.
 #define GR_GL_GET_ERROR(IFACE) (IFACE)->fFunctions.fGetError()
 
-GrGLenum GrToGLStencilFunc(GrStencilFunc basicFunc);
+GrGLenum GrToGLStencilFunc(GrStencilTest test);
 
 
 #endif

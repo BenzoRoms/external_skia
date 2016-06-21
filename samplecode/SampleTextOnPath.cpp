@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -35,10 +34,8 @@ static void textStrokePath(SkCanvas* canvas) {
 
     canvas->drawPath(path, paint);
 
-    paint.setLooper(SkBlurDrawLooper::Create(SK_ColorBLACK,
-                                             SkBlurMask::ConvertRadiusToSigma(0.002f),
-                                             0.0f,
-                                             0.0f))->unref();
+    paint.setLooper(SkBlurDrawLooper::Make(SK_ColorBLACK, SkBlurMask::ConvertRadiusToSigma(0.002f),
+                                           0.0f, 0.0f));
 
     const char* text = "DRAWING STROKED TEXT WITH A BLUR ON A PATH";
     size_t      len = strlen(text);
@@ -71,7 +68,7 @@ static void textPathMatrix(SkCanvas* canvas) {
     SkPathMeasure   meas(path, false);
     SkScalar pathLen = meas.getLength();
 
-    canvas->drawTextOnPath(text, len, path, NULL, paint);
+    canvas->drawTextOnPath(text, len, path, nullptr, paint);
 
     paint.setColor(SK_ColorRED);
     matrix.setScale(-SK_Scalar1, SK_Scalar1);
@@ -148,12 +145,12 @@ protected:
         textPathMatrix(canvas);
 
         if (REPEAT_COUNT > 1)
-            this->inval(NULL);
+            this->inval(nullptr);
     }
 
     SkView::Click* onFindClickHandler(SkScalar x, SkScalar y, unsigned modi) override {
         fHints += 1;
-        this->inval(NULL);
+        this->inval(nullptr);
         return this->INHERITED::onFindClickHandler(x, y, modi);
     }
 

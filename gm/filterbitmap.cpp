@@ -9,7 +9,6 @@
 
 #include "Resources.h"
 #include "SkGradientShader.h"
-#include "SkImageDecoder.h"
 #include "SkStream.h"
 #include "SkTypeface.h"
 
@@ -66,7 +65,7 @@ public:
 
     FilterBitmapGM()
     {
-        this->setBGColor(0xFFDDDDDD);
+        this->setBGColor(sk_tool_utils::color_to_565(0xFFDDDDDD));
     }
 
 protected:
@@ -124,13 +123,13 @@ class FilterBitmapTextGM: public FilterBitmapGM {
           paint.setSubpixelText(true);
           paint.setTextSize(fTextSize);
 
-          setTypeface(&paint, "Times", SkTypeface::kNormal);
+          setTypeface(&paint, "serif", SkTypeface::kNormal);
           canvas.drawText("Hamburgefons", 12, fTextSize/2, 1.2f*fTextSize, paint);
-          setTypeface(&paint, "Times", SkTypeface::kBold);
+          setTypeface(&paint, "serif", SkTypeface::kBold);
           canvas.drawText("Hamburgefons", 12, fTextSize/2, 2.4f*fTextSize, paint);
-          setTypeface(&paint, "Times", SkTypeface::kItalic);
+          setTypeface(&paint, "serif", SkTypeface::kItalic);
           canvas.drawText("Hamburgefons", 12, fTextSize/2, 3.6f*fTextSize, paint);
-          setTypeface(&paint, "Times", SkTypeface::kBoldItalic);
+          setTypeface(&paint, "serif", SkTypeface::kBoldItalic);
           canvas.drawText("Hamburgefons", 12, fTextSize/2, 4.8f*fTextSize, paint);
       }
   private:
@@ -196,26 +195,17 @@ protected:
       }
 
       void makeBitmap() override {
-          SkImageDecoder* codec = NULL;
-          SkString resourcePath = GetResourcePath(fFilename.c_str());
-          SkFILEStream stream(resourcePath.c_str());
-          if (stream.isValid()) {
-              codec = SkImageDecoder::Factory(&stream);
-          }
-          if (codec) {
-              stream.rewind();
-              codec->decode(&stream, &fBM, kN32_SkColorType, SkImageDecoder::kDecodePixels_Mode);
-              SkDELETE(codec);
-          } else {
-              fBM.allocN32Pixels(1, 1);
-              *(fBM.getAddr32(0,0)) = 0xFF0000FF; // red == bad
-          }
-          fSize = fBM.height();
-          if (fConvertToG8) {
-              SkBitmap tmp;
-              fBM.copyTo(&tmp, kGray_8_SkColorType);
-              fBM = tmp;
-          }
+        if (!GetResourceAsBitmap(fFilename.c_str(), &fBM)) {
+            fBM.allocN32Pixels(1, 1);
+            fBM.eraseARGB(255, 255, 0 , 0); // red == bad
+        }
+        fSize = fBM.height();
+
+        if (fConvertToG8) {
+            SkBitmap tmp;
+            fBM.copyTo(&tmp, kGray_8_SkColorType);
+            fBM = tmp;
+        }
       }
 private:
     const bool fConvertToG8;

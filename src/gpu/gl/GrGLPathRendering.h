@@ -10,12 +10,13 @@
 
 #include "SkRefCnt.h"
 #include "GrPathRendering.h"
-#include "GrStencil.h"
-#include "gl/GrGLFunctions.h"
-#include "gl/GrGLProgram.h"
+#include "gl/GrGLTypes.h"
+#include "glsl/GrGLSLUtil.h"
 
 class GrGLNameAllocator;
 class GrGLGpu;
+class GrStencilSettings;
+class GrStyle;
 
 /**
  * This class wraps the NV_path_rendering extension and manages its various
@@ -33,26 +34,22 @@ public:
     virtual ~GrGLPathRendering();
 
     // GrPathRendering implementations.
-    GrPath* createPath(const SkPath&, const SkStrokeRec&) override;
+    GrPath* createPath(const SkPath&, const GrStyle&) override;
     virtual GrPathRange* createPathRange(GrPathRange::PathGenerator*,
-                                         const SkStrokeRec&) override;
-    virtual GrPathRange* createGlyphs(const SkTypeface*,
-                                      const SkDescriptor*,
-                                      const SkStrokeRec&) override;
-    void stencilPath(const GrPath*, const GrStencilSettings&) override;
-    void drawPath(const GrPath*, const GrStencilSettings&) override;
-    virtual void drawPaths(const GrPathRange*, const void* indices, PathIndexType,
-                           const float transformValues[], PathTransformType, int count,
-                           const GrStencilSettings&) override;
+                                         const GrStyle&) override;
 
     /* Called when the 3D context state is unknown. */
     void resetContext();
 
     /**
-     * Called when the GPU resources have been lost and need to be abandoned
-     * (for example after a context loss).
+     * Called when the context either is about to be lost or is lost. DisconnectType indicates
+     * whether GPU resources should be cleaned up or abandoned when this is called.
      */
-    void abandonGpuResources();
+    void disconnect(GrGpu::DisconnectType);
+
+    bool shouldBindFragmentInputs() const {
+        return fCaps.bindFragmentInputSupport;
+    }
 
     // Functions for "separable shader" texturing support.
     void setProgramPathFragmentInputTransform(GrGLuint program, GrGLint location,
@@ -67,36 +64,30 @@ public:
     GrGLuint genPaths(GrGLsizei range);
     GrGLvoid deletePaths(GrGLuint path, GrGLsizei range);
 
+protected:
+    void onStencilPath(const StencilPathArgs&, const GrPath*) override;
+    void onDrawPath(const GrPipeline&,
+                    const GrPrimitiveProcessor&,
+                    const GrStencilSettings&,
+                    const GrPath*) override;
+    void onDrawPaths(const GrPipeline&,
+                     const GrPrimitiveProcessor&,
+                     const GrStencilSettings&,
+                     const GrPathRange*,
+                     const void* indices,
+                     PathIndexType,
+                     const float transformValues[],
+                     PathTransformType,
+                     int count) override;
 private:
     /**
-     * Mark certain functionality as not supported if the driver version is too
-     * old and a backup implementation is not practical.
+     * Mark certain functionality as not supported.
      */
     struct Caps {
-        bool stencilThenCoverSupport : 1;
-        bool fragmentInputGenSupport : 1;
-        bool glyphLoadingSupport     : 1;
+        bool bindFragmentInputSupport : 1;
     };
-    const Caps& caps() const { return fCaps; }
 
     void flushPathStencilSettings(const GrStencilSettings&);
-
-    // NV_path_rendering v1.2
-    void stencilThenCoverFillPath(GrGLuint path, GrGLenum fillMode,
-                                  GrGLuint mask, GrGLenum coverMode);
-
-    void stencilThenCoverStrokePath(GrGLuint path, GrGLint reference,
-                                    GrGLuint mask, GrGLenum coverMode);
-
-    void stencilThenCoverFillPathInstanced(
-        GrGLsizei numPaths, GrGLenum pathNameType, const GrGLvoid *paths,
-                         GrGLuint pathBase, GrGLenum fillMode, GrGLuint mask, GrGLenum coverMode,
-                         GrGLenum transformType, const GrGLfloat *transformValues);
-
-    void stencilThenCoverStrokePathInstanced(
-                         GrGLsizei numPaths, GrGLenum pathNameType, const GrGLvoid *paths,
-                         GrGLuint pathBase, GrGLint reference, GrGLuint mask, GrGLenum coverMode,
-                         GrGLenum transformType, const GrGLfloat *transformValues);
 
     struct MatrixState {
         SkMatrix        fViewMatrix;
@@ -114,7 +105,7 @@ private:
         /**
          * Gets a matrix that goes from local coordinates to GL normalized device coords.
          */
-        template<int Size> void getRTAdjustedGLMatrix(GrGLfloat* destMatrix) {
+        template<int Size> void getRTAdjustedGLMatrix(float* destMatrix) {
             SkMatrix combined;
             if (kBottomLeft_GrSurfaceOrigin == fRenderTargetOrigin) {
                 combined.setAll(SkIntToScalar(2) / fRenderTargetSize.fWidth, 0, -SK_Scalar1,
@@ -126,20 +117,16 @@ private:
                                 0, 0, 1);
             }
             combined.preConcat(fViewMatrix);
-            GrGLGetMatrix<Size>(destMatrix, combined);
+            GrGLSLGetMatrix<Size>(destMatrix, combined);
         }
     };
+    GrGLGpu* gpu();
 
-    GrGLGpu* fGpu;
-    SkAutoTDelete<GrGLNameAllocator> fPathNameAllocator;
-    Caps fCaps;
+    GrGLuint fFirstPreallocatedPathID;
+    GrGLsizei fPreallocatedPathCount;
     MatrixState fHWProjectionMatrixState;
     GrStencilSettings fHWPathStencilSettings;
-    struct PathTexGenData {
-        GrGLenum  fMode;
-        GrGLint   fNumComponents;
-        GrGLfloat fCoefficients[3 * 3];
-    };
+    Caps fCaps;
 };
 
 #endif

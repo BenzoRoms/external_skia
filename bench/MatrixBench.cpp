@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -27,11 +26,11 @@ public:
 protected:
     virtual int mulLoopCount() const { return 1; }
 
-    virtual const char* onGetName() {
+    const char* onGetName() override {
         return fName.c_str();
     }
 
-    virtual void onDraw(const int loops, SkCanvas*) {
+    void onDraw(int loops, SkCanvas*) override {
         for (int i = 0; i < loops; i++) {
             this->performTest();
         }
@@ -46,7 +45,7 @@ class EqualsMatrixBench : public MatrixBench {
 public:
     EqualsMatrixBench() : INHERITED("equals") {}
 protected:
-    virtual void performTest() {
+    void performTest() override {
         SkMatrix m0, m1, m2;
 
         m0.reset();
@@ -72,7 +71,7 @@ public:
         fM2.setTranslate(fSX, fSY);
     }
 protected:
-    virtual void performTest() {
+    void performTest() override {
         SkMatrix m;
         m = fM0; m.preScale(fSX, fSY);
         m = fM1; m.preScale(fSX, fSY);
@@ -112,7 +111,7 @@ protected:
     // Putting random generation of the matrix inside performTest()
     // would help us avoid anomalous runs, but takes up 25% or
     // more of the function time.
-    virtual void performTest() {
+    void performTest() override {
         fMatrix.setAll(fArray[0], fArray[1], fArray[2],
                        fArray[3], fArray[4], fArray[5],
                        fArray[6], fArray[7], fArray[8]);
@@ -146,7 +145,7 @@ public:
     DecomposeMatrixBench() : INHERITED("decompose") {}
 
 protected:
-    virtual void onPreDraw() {
+    void onDelayedSetup() override {
         for (int i = 0; i < 10; ++i) {
             SkScalar rot0 = (fRandom.nextBool()) ? fRandom.nextRangeF(-180, 180) : 0.0f;
             SkScalar sx = fRandom.nextRangeF(-3000.f, 3000.f);
@@ -157,7 +156,7 @@ protected:
             fMatrix[i].postRotate(rot1);
         }
     }
-    virtual void performTest() {
+    void performTest() override {
         SkPoint rotation1, scale, rotation2;
         for (int i = 0; i < 10; ++i) {
             (void) SkDecomposeUpper2x2(fMatrix[i], &rotation1, &scale, &rotation2);
@@ -201,7 +200,7 @@ public:
         kUncachedTypeMask_Flag  = 0x10,
     };
 protected:
-    virtual void performTest() {
+    void performTest() override {
         if (fFlags & kUncachedTypeMask_Flag) {
             // This will invalidate the typemask without
             // changing the matrix.
@@ -298,4 +297,3 @@ DEF_BENCH( return new MapPointsMatrixBench("mappoints_identity", SkMatrix::I());
 DEF_BENCH( return new MapPointsMatrixBench("mappoints_trans", make_trans()); )
 DEF_BENCH( return new MapPointsMatrixBench("mappoints_scale", make_scale()); )
 DEF_BENCH( return new MapPointsMatrixBench("mappoints_affine", make_afine()); )
-

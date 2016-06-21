@@ -5,13 +5,14 @@
  * found in the LICENSE file.
  */
 
-#include "Test.h"
-
+#include "RecordTestUtils.h"
 #include "SkBitmap.h"
 #include "SkImageInfo.h"
-#include "SkShader.h"
 #include "SkRecord.h"
 #include "SkRecords.h"
+#include "SkShader.h"
+#include "Test.h"
+
 
 // Sums the area of any DrawRect command it sees.
 class AreaSummer {
@@ -27,8 +28,8 @@ public:
     int area() const { return fArea; }
 
     void apply(const SkRecord& record) {
-        for (unsigned i = 0; i < record.count(); i++) {
-            record.visit<void>(i, *this);
+        for (int i = 0; i < record.count(); i++) {
+            record.visit(i, *this);
         }
     }
 
@@ -45,13 +46,13 @@ struct Stretch {
     }
 
     void apply(SkRecord* record) {
-        for (unsigned i = 0; i < record->count(); i++) {
-            record->mutate<void>(i, *this);
+        for (int i = 0; i < record->count(); i++) {
+            record->mutate(i, *this);
         }
     }
 };
 
-#define APPEND(record, type, ...) SkNEW_PLACEMENT_ARGS(record.append<type>(), type, (__VA_ARGS__))
+#define APPEND(record, type, ...) new (record.append<type>()) type{__VA_ARGS__}
 
 // Basic tests for the low-level SkRecord code.
 DEF_TEST(Record, r) {
@@ -76,6 +77,25 @@ DEF_TEST(Record, r) {
     REPORTER_ASSERT(r, summer.area() == 500);
 }
 
+DEF_TEST(Record_defrag, r) {
+    SkRecord record;
+    APPEND(record, SkRecords::Save);
+    APPEND(record, SkRecords::ClipRect);
+    APPEND(record, SkRecords::NoOp);
+    APPEND(record, SkRecords::DrawRect);
+    APPEND(record, SkRecords::NoOp);
+    APPEND(record, SkRecords::NoOp);
+    APPEND(record, SkRecords::Restore);
+    REPORTER_ASSERT(r, record.count() == 7);
+
+    record.defrag();
+    REPORTER_ASSERT(r, record.count() == 4);
+    assert_type<SkRecords::Save    >(r, record, 0);
+    assert_type<SkRecords::ClipRect>(r, record, 1);
+    assert_type<SkRecords::DrawRect>(r, record, 2);
+    assert_type<SkRecords::Restore >(r, record, 3);
+}
+
 #undef APPEND
 
 template <typename T>
@@ -96,4 +116,3 @@ DEF_TEST(Record_Alignment, r) {
         REPORTER_ASSERT(r, is_aligned(record.alloc<uint64_t>()));
     }
 }
-

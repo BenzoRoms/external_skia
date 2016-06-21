@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2010 The Android Open Source Project
  *
@@ -13,8 +12,8 @@
 SkScalar SkScalarInterpFunc(SkScalar searchKey, const SkScalar keys[],
                             const SkScalar values[], int length) {
     SkASSERT(length > 0);
-    SkASSERT(keys != NULL);
-    SkASSERT(values != NULL);
+    SkASSERT(keys != nullptr);
+    SkASSERT(values != nullptr);
 #ifdef SK_DEBUG
     for (int i = 1; i < length; i++)
         SkASSERT(keys[i] >= keys[i-1]);

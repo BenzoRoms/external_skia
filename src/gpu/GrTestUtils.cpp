@@ -6,6 +6,8 @@
  */
 
 #include "GrTestUtils.h"
+#include "GrStyle.h"
+#include "SkDashPathPriv.h"
 #include "SkMatrix.h"
 #include "SkPath.h"
 #include "SkRRect.h"
@@ -104,9 +106,9 @@ const SkRect& TestRect(SkRandom* random) {
         gRects[0] = SkRect::MakeWH(1.f, 1.f);
         gRects[1] = SkRect::MakeWH(1.0f, 256.0f);
         gRects[2] = SkRect::MakeWH(256.0f, 1.0f);
-        gRects[4] = SkRect::MakeLargest();
-        gRects[5] = SkRect::MakeLTRB(-65535.0f, -65535.0f, 65535.0f, 65535.0f);
-        gRects[6] = SkRect::MakeLTRB(-10.0f, -10.0f, 10.0f, 10.0f);
+        gRects[3] = SkRect::MakeLargest();
+        gRects[4] = SkRect::MakeLTRB(-65535.0f, -65535.0f, 65535.0f, 65535.0f);
+        gRects[5] = SkRect::MakeLTRB(-10.0f, -10.0f, 10.0f, 10.0f);
     }
     return gRects[random->nextULessThan(static_cast<uint32_t>(SK_ARRAY_COUNT(gRects)))];
 }
@@ -216,21 +218,72 @@ const SkPath& TestPathConvex(SkRandom* random) {
     return gPath[random->nextULessThan(static_cast<uint32_t>(SK_ARRAY_COUNT(gPath)))];
 }
 
-SkStrokeRec TestStrokeRec(SkRandom* random) {
-    SkStrokeRec::InitStyle style =
-            SkStrokeRec::InitStyle(random->nextULessThan(SkStrokeRec::kFill_InitStyle + 1));
-    SkStrokeRec rec(style);
+static void randomize_stroke_rec(SkStrokeRec* rec, SkRandom* random) {
     bool strokeAndFill = random->nextBool();
     SkScalar strokeWidth = random->nextBool() ? 0.f : 1.f;
-    rec.setStrokeStyle(strokeWidth, strokeAndFill);
+    rec->setStrokeStyle(strokeWidth, strokeAndFill);
 
     SkPaint::Cap cap = SkPaint::Cap(random->nextULessThan(SkPaint::kCapCount));
     SkPaint::Join join = SkPaint::Join(random->nextULessThan(SkPaint::kJoinCount));
     SkScalar miterLimit = random->nextRangeScalar(1.f, 5.f);
-    rec.setStrokeParams(cap, join, miterLimit);
+    rec->setStrokeParams(cap, join, miterLimit);
+}
+
+SkStrokeRec TestStrokeRec(SkRandom* random) {
+    SkStrokeRec::InitStyle style =
+            SkStrokeRec::InitStyle(random->nextULessThan(SkStrokeRec::kFill_InitStyle + 1));
+    SkStrokeRec rec(style);
+    randomize_stroke_rec(&rec, random);
     return rec;
 }
 
-};
+void TestStyle(SkRandom* random, GrStyle* style) {
+    SkStrokeRec::InitStyle initStyle =
+            SkStrokeRec::InitStyle(random->nextULessThan(SkStrokeRec::kFill_InitStyle + 1));
+    SkStrokeRec stroke(initStyle);
+    randomize_stroke_rec(&stroke, random);
+    sk_sp<SkPathEffect> pe;
+    if (random->nextBool()) {
+        int cnt = random->nextRangeU(1, 50) * 2;
+        SkAutoTDeleteArray<SkScalar> intervals(new SkScalar[cnt]);
+        SkScalar sum = 0;
+        for (int i = 0; i < cnt; i++) {
+            intervals[i] = random->nextRangeScalar(SkDoubleToScalar(0.01),
+                                                   SkDoubleToScalar(10.0));
+            sum += intervals[i];
+        }
+        SkScalar phase = random->nextRangeScalar(0, sum);
+        pe = TestDashPathEffect::Make(intervals.get(), cnt, phase);
+    }
+    *style = GrStyle(stroke, pe.get());
+}
+
+TestDashPathEffect::TestDashPathEffect(const SkScalar* intervals, int count, SkScalar phase) {
+    fCount = count;
+    fIntervals.reset(count);
+    memcpy(fIntervals.get(), intervals, count * sizeof(SkScalar));
+    SkDashPath::CalcDashParameters(phase, intervals, count, &fInitialDashLength,
+                                   &fInitialDashIndex, &fIntervalLength, &fPhase);
+}
+
+    bool TestDashPathEffect::filterPath(SkPath* dst, const SkPath& src, SkStrokeRec* rec,
+                                     const SkRect* cullRect) const {
+    return SkDashPath::InternalFilter(dst, src, rec, cullRect, fIntervals.get(), fCount,
+                                      fInitialDashLength, fInitialDashIndex, fIntervalLength);
+}
+
+SkPathEffect::DashType TestDashPathEffect::asADash(DashInfo* info) const {
+    if (info) {
+        if (info->fCount >= fCount && info->fIntervals) {
+            memcpy(info->fIntervals, fIntervals.get(), fCount * sizeof(SkScalar));
+        }
+        info->fCount = fCount;
+        info->fPhase = fPhase;
+    }
+    return kDash_DashType;
+}
+
+
+}  // namespace GrTest
 
 #endif

@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -10,7 +9,6 @@
 #include "SkCanvas.h"
 #include "SkGradientShader.h"
 #include "SkGraphics.h"
-#include "SkImageDecoder.h"
 #include "SkPath.h"
 #include "SkRandom.h"
 #include "SkRegion.h"
@@ -25,7 +23,7 @@
 #include "SkOSFile.h"
 #include "SkStream.h"
 
-static SkShader* make_shader0(SkIPoint* size) {
+static sk_sp<SkShader> make_shader0(SkIPoint* size) {
     SkBitmap    bm;
     size->set(2, 2);
     SkPMColor color0 = SkPreMultiplyARGB(0x80, 0x80, 0xff, 0x80);
@@ -38,21 +36,20 @@ static SkShader* make_shader0(SkIPoint* size) {
     pixels[1] = pixels[3] = color1;
     bm.unlockPixels();
 
-    return SkShader::CreateBitmapShader(bm, SkShader::kRepeat_TileMode,
-                                            SkShader::kRepeat_TileMode);
+    return SkShader::MakeBitmapShader(bm, SkShader::kRepeat_TileMode, SkShader::kRepeat_TileMode);
 }
 
-static SkShader* make_shader1(const SkIPoint& size) {
+static sk_sp<SkShader> make_shader1(const SkIPoint& size) {
     SkPoint pts[] = { { 0, 0 },
                       { SkIntToScalar(size.fX), SkIntToScalar(size.fY) } };
     SkColor colors[] = { SK_ColorRED, SK_ColorGREEN, SK_ColorBLUE, SK_ColorRED };
-    return SkGradientShader::CreateLinear(pts, colors, NULL,
+    return SkGradientShader::MakeLinear(pts, colors, nullptr,
                     SK_ARRAY_COUNT(colors), SkShader::kMirror_TileMode);
 }
 
 class VerticesView : public SampleView {
-    SkShader*   fShader0;
-    SkShader*   fShader1;
+    sk_sp<SkShader> fShader0;
+    sk_sp<SkShader> fShader1;
 
 public:
     VerticesView() {
@@ -68,11 +65,6 @@ public:
         fScale = SK_Scalar1;
 
         this->setBGColor(SK_ColorGRAY);
-    }
-
-    virtual ~VerticesView() {
-        SkSafeUnref(fShader0);
-        SkSafeUnref(fShader1);
     }
 
 protected:
@@ -95,24 +87,24 @@ protected:
         for (size_t i = 0; i < SK_ARRAY_COUNT(fRecs); i++) {
             canvas->save();
 
-            paint.setShader(NULL);
+            paint.setShader(nullptr);
             canvas->drawVertices(fRecs[i].fMode, fRecs[i].fCount,
                                  fRecs[i].fVerts, fRecs[i].fTexs,
-                                 NULL, NULL, NULL, 0, paint);
+                                 nullptr, nullptr, nullptr, 0, paint);
 
             canvas->translate(SkIntToScalar(250), 0);
 
             paint.setShader(fShader0);
             canvas->drawVertices(fRecs[i].fMode, fRecs[i].fCount,
                                  fRecs[i].fVerts, fRecs[i].fTexs,
-                                 NULL, NULL, NULL, 0, paint);
+                                 nullptr, nullptr, nullptr, 0, paint);
 
             canvas->translate(SkIntToScalar(250), 0);
 
             paint.setShader(fShader1);
             canvas->drawVertices(fRecs[i].fMode, fRecs[i].fCount,
                                  fRecs[i].fVerts, fRecs[i].fTexs,
-                                 NULL, NULL, NULL, 0, paint);
+                                 nullptr, nullptr, nullptr, 0, paint);
             canvas->restore();
 
             canvas->translate(0, SkIntToScalar(250));
@@ -126,7 +118,7 @@ protected:
     bool onClick(Click* click) override {
     //    fCurrX = click->fICurr.fX;
     //    fCurrY = click->fICurr.fY;
-        this->inval(NULL);
+        this->inval(nullptr);
         return true;
     }
 
@@ -137,7 +129,7 @@ private:
         SkPoint*                fVerts;
         SkPoint*                fTexs;
 
-        Rec() : fCount(0), fVerts(NULL), fTexs(NULL) {}
+        Rec() : fCount(0), fVerts(nullptr), fTexs(nullptr) {}
         ~Rec() { delete[] fVerts; delete[] fTexs; }
     };
 

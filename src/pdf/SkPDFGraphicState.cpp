@@ -6,12 +6,10 @@
  */
 
 #include "SkData.h"
-#include "SkLazyPtr.h"
 #include "SkPDFCanon.h"
 #include "SkPDFFormXObject.h"
 #include "SkPDFGraphicState.h"
 #include "SkPDFUtils.h"
-#include "SkTypes.h"
 
 static const char* as_blend_mode(SkXfermode::Mode mode) {
     switch (mode) {
@@ -65,9 +63,9 @@ static const char* as_blend_mode(SkXfermode::Mode mode) {
         // TODO(vandebo): Figure out if we can support more of these modes.
         case SkXfermode::kXor_Mode:
         case SkXfermode::kPlus_Mode:
-            return NULL;
+            return nullptr;
     }
-    return NULL;
+    return nullptr;
 }
 
 // If a SkXfermode is unsupported in PDF, this function returns
@@ -126,79 +124,62 @@ SkPDFGraphicState* SkPDFGraphicState::GetGraphicStateForPaint(
     return pdfGraphicState;
 }
 
-namespace {
-SkPDFObject* create_invert_function() {
+sk_sp<SkPDFStream> SkPDFGraphicState::MakeInvertFunction() {
     // Acrobat crashes if we use a type 0 function, kpdf crashes if we use
     // a type 2 function, so we use a type 4 function.
-    SkAutoTUnref<SkPDFArray> domainAndRange(new SkPDFArray);
+    auto domainAndRange = sk_make_sp<SkPDFArray>();
     domainAndRange->reserve(2);
     domainAndRange->appendInt(0);
     domainAndRange->appendInt(1);
 
     static const char psInvert[] = "{1 exch sub}";
     // Do not copy the trailing '\0' into the SkData.
-    SkAutoTUnref<SkData> psInvertStream(
+    sk_sp<SkData> psInvertStream(
             SkData::NewWithoutCopy(psInvert, strlen(psInvert)));
 
-    SkPDFStream* invertFunction = SkNEW_ARGS(
-            SkPDFStream, (psInvertStream.get()));
+    auto invertFunction = sk_make_sp<SkPDFStream>(psInvertStream.get());
     invertFunction->insertInt("FunctionType", 4);
-    invertFunction->insertObject("Domain", SkRef(domainAndRange.get()));
-    invertFunction->insertObject("Range", domainAndRange.detach());
+    invertFunction->insertObject("Domain", domainAndRange);
+    invertFunction->insertObject("Range", std::move(domainAndRange));
     return invertFunction;
 }
 
-template <typename T> void unref(T* ptr) { ptr->unref(); }
-}  // namespace
-
-SK_DECLARE_STATIC_LAZY_PTR(SkPDFObject,
-                           invertFunction,
-                           create_invert_function,
-                           unref<SkPDFObject>);
-
-// static
-SkPDFDict* SkPDFGraphicState::GetSMaskGraphicState(SkPDFFormXObject* sMask,
-                                                   bool invert,
-                                                   SkPDFSMaskMode sMaskMode) {
+sk_sp<SkPDFDict> SkPDFGraphicState::GetSMaskGraphicState(
+        SkPDFFormXObject* sMask,
+        bool invert,
+        SkPDFSMaskMode sMaskMode,
+        SkPDFCanon* canon) {
     // The practical chances of using the same mask more than once are unlikely
     // enough that it's not worth canonicalizing.
-    SkAutoTUnref<SkPDFDict> sMaskDict(new SkPDFDict("Mask"));
+    auto sMaskDict = sk_make_sp<SkPDFDict>("Mask");
     if (sMaskMode == kAlpha_SMaskMode) {
         sMaskDict->insertName("S", "Alpha");
     } else if (sMaskMode == kLuminosity_SMaskMode) {
         sMaskDict->insertName("S", "Luminosity");
     }
-    sMaskDict->insertObjRef("G", SkRef(sMask));
+    sMaskDict->insertObjRef("G", sk_ref_sp(sMask));
     if (invert) {
-        sMaskDict->insertObjRef("TR", SkRef(invertFunction.get()));
+        // Instead of calling SkPDFGraphicState::MakeInvertFunction,
+        // let the canon deduplicate this object.
+        sMaskDict->insertObjRef("TR", canon->makeInvertFunction());
     }
 
-    SkPDFDict* result = new SkPDFDict("ExtGState");
-    result->insertObject("SMask", sMaskDict.detach());
+    auto result = sk_make_sp<SkPDFDict>("ExtGState");
+    result->insertObject("SMask", std::move(sMaskDict));
     return result;
 }
 
-namespace {
-SkPDFDict* create_no_smask_graphic_state() {
-    SkPDFDict* noSMaskGS = new SkPDFDict("ExtGState");
+sk_sp<SkPDFDict> SkPDFGraphicState::MakeNoSmaskGraphicState() {
+    auto noSMaskGS = sk_make_sp<SkPDFDict>("ExtGState");
     noSMaskGS->insertName("SMask", "None");
     return noSMaskGS;
 }
-} // namespace
-SK_DECLARE_STATIC_LAZY_PTR(SkPDFDict,
-                           noSMaskGraphicState,
-                           create_no_smask_graphic_state,
-                           unref<SkPDFDict>);
 
-// static
-SkPDFDict* SkPDFGraphicState::GetNoSMaskGraphicState() {
-    return SkRef(noSMaskGraphicState.get());
-}
-
-void SkPDFGraphicState::emitObject(SkWStream* stream,
-                                   const SkPDFObjNumMap& objNumMap,
-                                   const SkPDFSubstituteMap& substitutes) {
-    SkAutoTUnref<SkPDFDict> dict(SkNEW_ARGS(SkPDFDict, ("ExtGState")));
+void SkPDFGraphicState::emitObject(
+        SkWStream* stream,
+        const SkPDFObjNumMap& objNumMap,
+        const SkPDFSubstituteMap& substitutes) const {
+    auto dict = sk_make_sp<SkPDFDict>("ExtGState");
     dict->insertName("Type", "ExtGState");
 
     SkScalar alpha = SkIntToScalar(fAlpha) / 0xFF;
@@ -209,17 +190,17 @@ void SkPDFGraphicState::emitObject(SkWStream* stream,
     SkPaint::Join strokeJoin = (SkPaint::Join)fStrokeJoin;
     SkXfermode::Mode xferMode = (SkXfermode::Mode)fMode;
 
-    SK_COMPILE_ASSERT(SkPaint::kButt_Cap == 0, paint_cap_mismatch);
-    SK_COMPILE_ASSERT(SkPaint::kRound_Cap == 1, paint_cap_mismatch);
-    SK_COMPILE_ASSERT(SkPaint::kSquare_Cap == 2, paint_cap_mismatch);
-    SK_COMPILE_ASSERT(SkPaint::kCapCount == 3, paint_cap_mismatch);
+    static_assert(SkPaint::kButt_Cap == 0, "paint_cap_mismatch");
+    static_assert(SkPaint::kRound_Cap == 1, "paint_cap_mismatch");
+    static_assert(SkPaint::kSquare_Cap == 2, "paint_cap_mismatch");
+    static_assert(SkPaint::kCapCount == 3, "paint_cap_mismatch");
     SkASSERT(strokeCap >= 0 && strokeCap <= 2);
     dict->insertInt("LC", strokeCap);
 
-    SK_COMPILE_ASSERT(SkPaint::kMiter_Join == 0, paint_join_mismatch);
-    SK_COMPILE_ASSERT(SkPaint::kRound_Join == 1, paint_join_mismatch);
-    SK_COMPILE_ASSERT(SkPaint::kBevel_Join == 2, paint_join_mismatch);
-    SK_COMPILE_ASSERT(SkPaint::kJoinCount == 3, paint_join_mismatch);
+    static_assert(SkPaint::kMiter_Join == 0, "paint_join_mismatch");
+    static_assert(SkPaint::kRound_Join == 1, "paint_join_mismatch");
+    static_assert(SkPaint::kBevel_Join == 2, "paint_join_mismatch");
+    static_assert(SkPaint::kJoinCount == 3, "paint_join_mismatch");
     SkASSERT(strokeJoin >= 0 && strokeJoin <= 2);
     dict->insertInt("LJ", strokeJoin);
 

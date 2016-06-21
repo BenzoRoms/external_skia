@@ -5,8 +5,9 @@
  * found in the LICENSE file.
  */
 
-#include "SkCodecPriv.h"
 #include "SkJpegUtility.h"
+
+#include "SkCodecPriv.h"
 
 /*
  * Initialize the source manager
@@ -23,7 +24,7 @@ static void sk_init_source(j_decompress_ptr dinfo) {
 static boolean sk_fill_input_buffer(j_decompress_ptr dinfo) {
     skjpeg_source_mgr* src = (skjpeg_source_mgr*) dinfo->src;
     size_t bytes = src->fStream->read(src->fBuffer, skjpeg_source_mgr::kBufferSize);
-    
+
     // libjpeg is still happy with a less than full read, as long as the result is non-zero
     if (bytes == 0) {
         return false;
@@ -61,7 +62,12 @@ static void sk_skip_input_data(j_decompress_ptr dinfo, long numBytes) {
  * We do not need to do anything to terminate our stream
  */
 static void sk_term_source(j_decompress_ptr dinfo)
-{}
+{
+    // The current implementation of SkJpegCodec does not call
+    // jpeg_finish_decompress(), so this function is never called.
+    // If we want to modify this function to do something, we also
+    // need to modify SkJpegCodec to call jpeg_finish_decompress().
+}
 
 /*
  * Constructor for the source manager that we provide to libjpeg

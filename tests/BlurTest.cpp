@@ -8,11 +8,12 @@
 #include "SkBlurMask.h"
 #include "SkBlurMaskFilter.h"
 #include "SkBlurDrawLooper.h"
-#include "SkLayerDrawLooper.h"
-#include "SkEmbossMaskFilter.h"
 #include "SkCanvas.h"
+#include "SkEmbossMaskFilter.h"
+#include "SkLayerDrawLooper.h"
 #include "SkMath.h"
 #include "SkPaint.h"
+#include "SkPath.h"
 #include "Test.h"
 
 #if SK_SUPPORT_GPU
@@ -98,8 +99,7 @@ static bool compare(const SkBitmap& ref, const SkIRect& iref,
     return true;
 }
 
-static void test_blur_drawing(skiatest::Reporter* reporter) {
-
+DEF_TEST(BlurDrawing, reporter) {
     SkPaint paint;
     paint.setColor(SK_ColorGRAY);
     paint.setStyle(SkPaint::kStroke_Style);
@@ -111,11 +111,7 @@ static void test_blur_drawing(skiatest::Reporter* reporter) {
 
         const uint32_t flagPermutations = SkBlurMaskFilter::kAll_BlurFlag;
         for (uint32_t flags = 0; flags < flagPermutations; ++flags) {
-            SkMaskFilter* filter;
-            filter = SkBlurMaskFilter::Create(blurStyle, sigma, flags);
-
-            paint.setMaskFilter(filter);
-            filter->unref();
+            paint.setMaskFilter(SkBlurMaskFilter::Make(blurStyle, sigma, flags));
 
             for (size_t test = 0; test < SK_ARRAY_COUNT(tests); ++test) {
                 SkPath path;
@@ -170,8 +166,9 @@ static void ground_truth_2d(int width, int height,
 
     memset(src.fImage, 0xff, src.computeTotalImageSize());
 
-    dst.fImage = NULL;
-    SkBlurMask::BlurGroundTruth(sigma, &dst, src, kNormal_SkBlurStyle);
+    if (!SkBlurMask::BlurGroundTruth(sigma, &dst, src, kNormal_SkBlurStyle)) {
+        return;
+    }
 
     int midX = dst.fBounds.centerX();
     int midY = dst.fBounds.centerY();
@@ -233,10 +230,8 @@ static void blur_path(SkCanvas* canvas, const SkPath& path,
 
     SkPaint blurPaint;
     blurPaint.setColor(SK_ColorWHITE);
-    SkMaskFilter* filter = SkBlurMaskFilter::Create(kNormal_SkBlurStyle,
-                                                    gaussianSigma,
-                                                    SkBlurMaskFilter::kHighQuality_BlurFlag);
-    blurPaint.setMaskFilter(filter)->unref();
+    blurPaint.setMaskFilter(SkBlurMaskFilter::Make(kNormal_SkBlurStyle, gaussianSigma,
+                                                   SkBlurMaskFilter::kHighQuality_BlurFlag));
 
     canvas->drawColor(SK_ColorBLACK);
     canvas->drawPath(path, blurPaint);
@@ -275,15 +270,9 @@ static void cpu_blur_path(const SkPath& path, SkScalar gaussianSigma,
 #if SK_SUPPORT_GPU
 #if 0
 // temporary disable; see below for explanation
-static bool gpu_blur_path(GrContextFactory* factory, const SkPath& path,
+static bool gpu_blur_path(GrContext* context, const SkPath& path,
                           SkScalar gaussianSigma,
                           int* result, int resultCount) {
-
-    GrContext* grContext = factory->get(GrContextFactory::kNative_GLContextType);
-    if (NULL == grContext) {
-        return false;
-    }
-
     GrSurfaceDesc desc;
     desc.fConfig = kSkia8888_GrPixelConfig;
     desc.fFlags = kRenderTarget_GrSurfaceFlag;
@@ -291,8 +280,8 @@ static bool gpu_blur_path(GrContextFactory* factory, const SkPath& path,
     desc.fHeight = 30;
     desc.fSampleCnt = 0;
 
-    SkAutoTUnref<GrTexture> texture(grContext->createTexture(desc, false, NULL, 0));
-    SkAutoTUnref<SkGpuDevice> device(SkNEW_ARGS(SkGpuDevice, (grContext, texture.get())));
+    SkAutoTUnref<GrTexture> texture(grContext->createTexture(desc, false, nullptr, 0));
+    SkAutoTUnref<SkGpuDevice> device(new SkGpuDevice  (grContext, texture.get()));
     SkCanvas canvas(device.get());
 
     blur_path(&canvas, path, gaussianSigma);
@@ -325,8 +314,7 @@ static bool match(int* first, int* second, int count, int tol) {
 }
 
 // Test out the normal blur style with a wide range of sigmas
-static void test_sigma_range(skiatest::Reporter* reporter, GrContextFactory* factory) {
-
+DEF_TEST(BlurSigmaRange, reporter) {
     static const int kSize = 100;
 
     // The geometry is offset a smidge to trigger:
@@ -364,7 +352,7 @@ static void test_sigma_range(skiatest::Reporter* reporter, GrContextFactory* fac
 #if SK_SUPPORT_GPU
 #if 0
         int gpuResult[kSize];
-        bool haveGPUResult = gpu_blur_path(factory, rectPath, sigma, gpuResult, kSize);
+        bool haveGPUResult = gpu_blur_path(context, rectPath, sigma, gpuResult, kSize);
         // Disabling this test for now -- I don't think it's a legit comparison.
         // Will continue to investigate this.
         if (haveGPUResult) {
@@ -424,12 +412,12 @@ static void test_blurDrawLooper(skiatest::Reporter* reporter, SkScalar sigma,
     const SkBlurQuality quality = blurMaskFilterFlags_as_quality(blurMaskFilterFlags);
     uint32_t flags = blurMaskFilterFlags_to_blurDrawLooperFlags(blurMaskFilterFlags);
 
-    SkAutoTUnref<SkDrawLooper> lp(SkBlurDrawLooper::Create(color, sigma, dx, dy, flags));
+    sk_sp<SkDrawLooper> lp(SkBlurDrawLooper::Make(color, sigma, dx, dy, flags));
 
     const bool expectSuccess = sigma > 0 &&
                                0 == (flags & SkBlurDrawLooper::kIgnoreTransform_BlurFlag);
 
-    if (NULL == lp.get()) {
+    if (nullptr == lp) {
         REPORTER_ASSERT(reporter, sigma <= 0);
     } else {
         SkDrawLooper::BlurShadowRec rec;
@@ -446,8 +434,8 @@ static void test_blurDrawLooper(skiatest::Reporter* reporter, SkScalar sigma,
     }
 }
 
-static void test_delete_looper(skiatest::Reporter* reporter, SkDrawLooper* lp, SkScalar sigma,
-                               SkBlurStyle style, SkBlurQuality quality, bool expectSuccess) {
+static void test_looper(skiatest::Reporter* reporter, sk_sp<SkDrawLooper> lp, SkScalar sigma,
+                        SkBlurStyle style, SkBlurQuality quality, bool expectSuccess) {
     SkDrawLooper::BlurShadowRec rec;
     bool success = lp->asABlurShadow(&rec);
     REPORTER_ASSERT(reporter, success == expectSuccess);
@@ -459,7 +447,6 @@ static void test_delete_looper(skiatest::Reporter* reporter, SkDrawLooper* lp, S
         REPORTER_ASSERT(reporter, rec.fStyle == style);
         REPORTER_ASSERT(reporter, rec.fQuality == quality);
     }
-    lp->unref();
 }
 
 static void make_noop_layer(SkLayerDrawLooper::Builder* builder) {
@@ -470,43 +457,44 @@ static void make_noop_layer(SkLayerDrawLooper::Builder* builder) {
     builder->addLayer(info);
 }
 
-static void make_blur_layer(SkLayerDrawLooper::Builder* builder, SkMaskFilter* mf) {
+static void make_blur_layer(SkLayerDrawLooper::Builder* builder, sk_sp<SkMaskFilter> mf) {
     SkLayerDrawLooper::LayerInfo info;
 
     info.fPaintBits = SkLayerDrawLooper::kMaskFilter_Bit;
     info.fColorMode = SkXfermode::kSrc_Mode;
     SkPaint* paint = builder->addLayer(info);
-    paint->setMaskFilter(mf);
+    paint->setMaskFilter(std::move(mf));
 }
 
-static void test_layerDrawLooper(skiatest::Reporter* reporter, SkMaskFilter* mf, SkScalar sigma,
-                                 SkBlurStyle style, SkBlurQuality quality, bool expectSuccess) {
+static void test_layerDrawLooper(skiatest::Reporter* reporter, sk_sp<SkMaskFilter> mf,
+                                 SkScalar sigma, SkBlurStyle style, SkBlurQuality quality,
+                                 bool expectSuccess) {
 
     SkLayerDrawLooper::LayerInfo info;
     SkLayerDrawLooper::Builder builder;
 
     // 1 layer is too few
     make_noop_layer(&builder);
-    test_delete_looper(reporter, builder.detachLooper(), sigma, style, quality, false);
+    test_looper(reporter, builder.detach(), sigma, style, quality, false);
 
     // 2 layers is good, but need blur
     make_noop_layer(&builder);
     make_noop_layer(&builder);
-    test_delete_looper(reporter, builder.detachLooper(), sigma, style, quality, false);
+    test_looper(reporter, builder.detach(), sigma, style, quality, false);
 
     // 2 layers is just right
     make_noop_layer(&builder);
     make_blur_layer(&builder, mf);
-    test_delete_looper(reporter, builder.detachLooper(), sigma, style, quality, expectSuccess);
+    test_looper(reporter, builder.detach(), sigma, style, quality, expectSuccess);
 
     // 3 layers is too many
     make_noop_layer(&builder);
     make_blur_layer(&builder, mf);
     make_noop_layer(&builder);
-    test_delete_looper(reporter, builder.detachLooper(), sigma, style, quality, false);
+    test_looper(reporter, builder.detach(), sigma, style, quality, false);
 }
 
-static void test_asABlur(skiatest::Reporter* reporter) {
+DEF_TEST(BlurAsABlur, reporter) {
     const SkBlurStyle styles[] = {
         kNormal_SkBlurStyle, kSolid_SkBlurStyle, kOuter_SkBlurStyle, kInner_SkBlurStyle
     };
@@ -524,8 +512,8 @@ static void test_asABlur(skiatest::Reporter* reporter) {
             for (int flags = 0; flags <= SkBlurMaskFilter::kAll_BlurFlag; ++flags) {
                 const SkBlurQuality quality = blurMaskFilterFlags_as_quality(flags);
 
-                SkAutoTUnref<SkMaskFilter> mf(SkBlurMaskFilter::Create(style, sigma, flags));
-                if (NULL == mf.get()) {
+                sk_sp<SkMaskFilter> mf(SkBlurMaskFilter::Make(style, sigma, flags));
+                if (nullptr == mf.get()) {
                     REPORTER_ASSERT(reporter, sigma <= 0);
                 } else {
                     REPORTER_ASSERT(reporter, sigma > 0);
@@ -539,7 +527,7 @@ static void test_asABlur(skiatest::Reporter* reporter) {
                         REPORTER_ASSERT(reporter, rec.fStyle == style);
                         REPORTER_ASSERT(reporter, rec.fQuality == quality);
                     }
-                    test_layerDrawLooper(reporter, mf, sigma, style, quality, success);
+                    test_layerDrawLooper(reporter, std::move(mf), sigma, style, quality, success);
                 }
                 test_blurDrawLooper(reporter, sigma, style, flags);
             }
@@ -554,8 +542,8 @@ static void test_asABlur(skiatest::Reporter* reporter) {
         };
         for (size_t j = 0; j < SK_ARRAY_COUNT(sigmas); ++j) {
             const SkScalar sigma = sigmas[j];
-            SkAutoTUnref<SkMaskFilter> mf(SkEmbossMaskFilter::Create(sigma, light));
-            if (mf.get()) {
+            auto mf(SkEmbossMaskFilter::Make(sigma, light));
+            if (mf) {
                 SkMaskFilter::BlurRec rec;
                 bool success = mf->asABlur(&rec);
                 REPORTER_ASSERT(reporter, !success);
@@ -564,10 +552,25 @@ static void test_asABlur(skiatest::Reporter* reporter) {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+#if SK_SUPPORT_GPU
 
-DEF_GPUTEST(Blur, reporter, factory) {
-    test_blur_drawing(reporter);
-    test_sigma_range(reporter, factory);
-    test_asABlur(reporter);
+// This exercises the problem discovered in crbug.com/570232. The return value from
+// SkBlurMask::BoxBlur wasn't being checked in SkBlurMaskFilter.cpp::GrRRectBlurEffect::Create
+DEF_GPUTEST_FOR_GL_RENDERING_CONTEXTS(SmallBoxBlurBug, reporter, ctxInfo) {
+
+    SkImageInfo info = SkImageInfo::MakeN32Premul(128, 128);
+    auto surface(SkSurface::MakeRenderTarget(ctxInfo.grContext(), SkBudgeted::kNo, info));
+    SkCanvas* canvas = surface->getCanvas();
+
+    SkRect r = SkRect::MakeXYWH(10, 10, 100, 100);
+    SkRRect rr = SkRRect::MakeRectXY(r, 10, 10);
+
+    SkPaint p;
+    p.setMaskFilter(SkBlurMaskFilter::Make(kNormal_SkBlurStyle, 0.01f));
+
+    canvas->drawRRect(rr, p);
 }
+
+#endif
+
+///////////////////////////////////////////////////////////////////////////////////////////

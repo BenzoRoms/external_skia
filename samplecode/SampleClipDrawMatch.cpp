@@ -8,6 +8,8 @@
 #include "SampleCode.h"
 #include "SkCanvas.h"
 #include "SkInterpolator.h"
+#include "SkPath.h"
+#include "SkRRect.h"
 #include "SkTime.h"
 
 // This slide tests out the match up between BW clipping and rendering. It can
@@ -109,7 +111,7 @@ static void draw_normal_geom(SkCanvas* canvas, const SkPoint& offset, int geom, 
     case kRectAndConcave_Geometry:
         canvas->drawPath(create_concave_path(offset), p);
         break;
-    } 
+    }
 }
 
 class ClipDrawMatchView : public SampleView {
@@ -119,15 +121,15 @@ public:
 
         fTrans.setRepeatCount(999);
         values[0] = values[1] = 0;
-        fTrans.setKeyFrame(0, SkTime::GetMSecs() + 1000, values);
+        fTrans.setKeyFrame(0, GetMSecs() + 1000, values);
         values[1] = 1;
-        fTrans.setKeyFrame(1, SkTime::GetMSecs() + 2000, values);
+        fTrans.setKeyFrame(1, GetMSecs() + 2000, values);
         values[0] = values[1] = 1;
-        fTrans.setKeyFrame(2, SkTime::GetMSecs() + 3000, values);
+        fTrans.setKeyFrame(2, GetMSecs() + 3000, values);
         values[1] = 0;
-        fTrans.setKeyFrame(3, SkTime::GetMSecs() + 4000, values);
+        fTrans.setKeyFrame(3, GetMSecs() + 4000, values);
         values[0] = 0;
-        fTrans.setKeyFrame(4, SkTime::GetMSecs() + 5000, values);
+        fTrans.setKeyFrame(4, GetMSecs() + 5000, values);
     }
 
 protected:
@@ -139,17 +141,17 @@ protected:
         SkUnichar uni;
         if (SampleCode::CharQ(*evt, &uni)) {
             switch (uni) {
-                case '1': fGeom = kRect_Geometry; this->inval(NULL); return true;
-                case '2': fGeom = kRRect_Geometry; this->inval(NULL); return true;
-                case '3': fGeom = kCircle_Geometry; this->inval(NULL); return true;
-                case '4': fGeom = kConvexPath_Geometry; this->inval(NULL); return true;
-                case '5': fGeom = kConcavePath_Geometry; this->inval(NULL); return true;
-                case '6': fGeom = kRectAndRect_Geometry; this->inval(NULL); return true;
-                case '7': fGeom = kRectAndRRect_Geometry; this->inval(NULL); return true;
-                case '8': fGeom = kRectAndConvex_Geometry; this->inval(NULL); return true;
-                case '9': fGeom = kRectAndConcave_Geometry; this->inval(NULL); return true;
-                case 'f': fSign = -fSign; this->inval(NULL); return true;
-                case 't': fClipFirst = !fClipFirst; this->inval(NULL); return true;
+                case '1': fGeom = kRect_Geometry; this->inval(nullptr); return true;
+                case '2': fGeom = kRRect_Geometry; this->inval(nullptr); return true;
+                case '3': fGeom = kCircle_Geometry; this->inval(nullptr); return true;
+                case '4': fGeom = kConvexPath_Geometry; this->inval(nullptr); return true;
+                case '5': fGeom = kConcavePath_Geometry; this->inval(nullptr); return true;
+                case '6': fGeom = kRectAndRect_Geometry; this->inval(nullptr); return true;
+                case '7': fGeom = kRectAndRRect_Geometry; this->inval(nullptr); return true;
+                case '8': fGeom = kRectAndConvex_Geometry; this->inval(nullptr); return true;
+                case '9': fGeom = kRectAndConcave_Geometry; this->inval(nullptr); return true;
+                case 'f': fSign = -fSign; this->inval(nullptr); return true;
+                case 't': fClipFirst = !fClipFirst; this->inval(nullptr); return true;
                 default: break;
             }
         }
@@ -200,7 +202,7 @@ protected:
             canvas->clipRect(r, SkRegion::kReplace_Op, true); // AA here forces shader clips
             canvas->clipPath(create_concave_path(offset), SkRegion::kIntersect_Op, useAA);
             } break;
-        } 
+        }
 
         SkISize size = canvas->getDeviceSize();
         SkRect bigR = SkRect::MakeWH(SkIntToScalar(size.width()), SkIntToScalar(size.height()));
@@ -229,7 +231,7 @@ protected:
 
     void onDrawContent(SkCanvas* canvas) override {
         SkScalar trans[2];
-        fTrans.timeToValues(SkTime::GetMSecs(), trans);
+        fTrans.timeToValues(GetMSecs(), trans);
 
         SkPoint offset;
         offset.set(trans[0], trans[1]);
@@ -238,7 +240,11 @@ protected:
         this->drawGeometry(canvas, offset, false);
         canvas->restoreToCount(saveCount);
 
-        this->inval(NULL);
+        this->inval(nullptr);
+    }
+
+    SkMSec GetMSecs() const {
+        return static_cast<SkMSec>(SkTime::GetMSecs() - fStart);
     }
 
 private:
@@ -246,6 +252,7 @@ private:
     Geometry        fGeom;
     bool            fClipFirst;
     int             fSign;
+    const double    fStart = SkTime::GetMSecs();
 
     typedef SampleView INHERITED;
 };

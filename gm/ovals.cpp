@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2013 Google Inc.
  *
@@ -132,7 +131,7 @@ protected:
         hsv[1] = rand->nextRangeF(0.75f, 1.0f);
         hsv[2] = rand->nextRangeF(0.75f, 1.0f);
 
-        return SkHSVToColor(hsv);
+        return sk_tool_utils::color_to_565(SkHSVToColor(hsv));
     }
 
     void onDraw(SkCanvas* canvas) override {
@@ -150,7 +149,7 @@ protected:
         rectPaint.setAntiAlias(true);
         rectPaint.setStyle(SkPaint::kStroke_Style);
         rectPaint.setStrokeWidth(SkIntToScalar(0));
-        rectPaint.setColor(SK_ColorLTGRAY);
+        rectPaint.setColor(sk_tool_utils::color_to_565(SK_ColorLTGRAY));
 
         int testCount = 0;
         for (int i = 0; i < fPaints.count(); ++i) {
@@ -246,12 +245,8 @@ protected:
         SkPoint center = SkPoint::Make(SkIntToScalar(0), SkIntToScalar(0));
         SkColor colors[] = { SK_ColorBLUE, SK_ColorRED, SK_ColorGREEN };
         SkScalar pos[] = { 0, SK_ScalarHalf, SK_Scalar1 };
-        SkAutoTUnref<SkShader> shader(SkGradientShader::CreateRadial(center,
-                                                     SkIntToScalar(20),
-                                                     colors,
-                                                     pos,
-                                                     SK_ARRAY_COUNT(colors),
-                                                     SkShader::kClamp_TileMode));
+        auto shader = SkGradientShader::MakeRadial(center, 20, colors, pos, SK_ARRAY_COUNT(colors),
+                                                   SkShader::kClamp_TileMode);
 
         for (int i = 0; i < fPaints.count(); ++i) {
             canvas->save();
@@ -267,7 +262,7 @@ protected:
             canvas->drawRect(oval, rectPaint);
             canvas->drawOval(oval, fPaints[i]);
 
-            fPaints[i].setShader(NULL);
+            fPaints[i].setShader(nullptr);
 
             canvas->restore();
         }

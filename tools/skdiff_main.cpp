@@ -10,13 +10,13 @@
 #include "SkBitmap.h"
 #include "SkData.h"
 #include "SkForceLinking.h"
-#include "SkImageDecoder.h"
 #include "SkImageEncoder.h"
 #include "SkOSFile.h"
 #include "SkStream.h"
-#include "SkTDArray.h"
-#include "SkTemplates.h"
-#include "SkTSearch.h"
+#include "../private/SkTDArray.h"
+#include "../private/SkTSearch.h"
+
+#include <stdlib.h>
 
 __SK_FORCE_IMAGE_DECODER_LINKING;
 
@@ -328,13 +328,13 @@ class AutoReleasePixels {
 public:
     AutoReleasePixels(DiffRecord* drp)
     : fDrp(drp) {
-        SkASSERT(drp != NULL);
+        SkASSERT(drp != nullptr);
     }
     ~AutoReleasePixels() {
-        fDrp->fBase.fBitmap.setPixelRef(NULL);
-        fDrp->fComparison.fBitmap.setPixelRef(NULL);
-        fDrp->fDifference.fBitmap.setPixelRef(NULL);
-        fDrp->fWhite.fBitmap.setPixelRef(NULL);
+        fDrp->fBase.fBitmap.setPixelRef(nullptr);
+        fDrp->fComparison.fBitmap.setPixelRef(nullptr);
+        fDrp->fDifference.fBitmap.setPixelRef(nullptr);
+        fDrp->fWhite.fBitmap.setPixelRef(nullptr);
     }
 
 private:
@@ -344,11 +344,11 @@ private:
 static void get_bounds(DiffResource& resource, const char* name) {
     if (resource.fBitmap.empty() && !DiffResource::isStatusFailed(resource.fStatus)) {
         SkAutoDataUnref fileBits(read_file(resource.fFullPath.c_str()));
-        if (NULL == fileBits) {
+        if (nullptr == fileBits) {
             SkDebugf("WARNING: couldn't read %s file <%s>\n", name, resource.fFullPath.c_str());
             resource.fStatus = DiffResource::kCouldNotRead_Status;
         } else {
-            get_bitmap(fileBits, resource, SkImageDecoder::kDecodeBounds_Mode);
+            get_bitmap(fileBits, resource, true);
         }
     }
 }
@@ -403,6 +403,10 @@ static void create_diff_images (DiffMetricProc dmp,
     if (!comparisonFiles.isEmpty()) {
         qsort(comparisonFiles.begin(), comparisonFiles.count(),
               sizeof(SkString*), SkCastForQSort(compare_file_name_metrics));
+    }
+
+    if (!outputDir.isEmpty()) {
+        sk_mkdir(outputDir.c_str());
     }
 
     int i = 0;
@@ -476,12 +480,12 @@ static void create_diff_images (DiffMetricProc dmp,
             if (comparisonFileBits) {
                 drp->fComparison.fStatus = DiffResource::kRead_Status;
             }
-            if (NULL == baseFileBits || NULL == comparisonFileBits) {
-                if (NULL == baseFileBits) {
+            if (nullptr == baseFileBits || nullptr == comparisonFileBits) {
+                if (nullptr == baseFileBits) {
                     drp->fBase.fStatus = DiffResource::kCouldNotRead_Status;
                     VERBOSE_STATUS("READ FAIL", ANSI_COLOR_RED, baseFiles[i]);
                 }
-                if (NULL == comparisonFileBits) {
+                if (nullptr == comparisonFileBits) {
                     drp->fComparison.fStatus = DiffResource::kCouldNotRead_Status;
                     VERBOSE_STATUS("READ FAIL", ANSI_COLOR_RED, comparisonFiles[j]);
                 }
@@ -492,9 +496,8 @@ static void create_diff_images (DiffMetricProc dmp,
                 VERBOSE_STATUS("MATCH", ANSI_COLOR_GREEN, baseFiles[i]);
             } else {
                 AutoReleasePixels arp(drp);
-                get_bitmap(baseFileBits, drp->fBase, SkImageDecoder::kDecodePixels_Mode);
-                get_bitmap(comparisonFileBits, drp->fComparison,
-                           SkImageDecoder::kDecodePixels_Mode);
+                get_bitmap(baseFileBits, drp->fBase, false);
+                get_bitmap(comparisonFileBits, drp->fComparison, false);
                 VERBOSE_STATUS("DIFFERENT", ANSI_COLOR_RED, baseFiles[i]);
                 if (DiffResource::kDecoded_Status == drp->fBase.fStatus &&
                     DiffResource::kDecoded_Status == drp->fComparison.fStatus) {

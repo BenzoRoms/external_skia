@@ -8,15 +8,13 @@
 #include "CrashHandler.h"
 #include "OverwriteLine.h"
 #include "Resources.h"
+#include "SkAtomics.h"
 #include "SkCommonFlags.h"
 #include "SkGraphics.h"
-#include "SkInstCnt.h"
 #include "SkOSFile.h"
-#include "SkRunnable.h"
 #include "SkTArray.h"
 #include "SkTaskGroup.h"
 #include "SkTemplates.h"
-#include "SkThread.h"
 #include "SkTime.h"
 #include "Test.h"
 
@@ -26,11 +24,13 @@
 #endif
 
 using namespace skiatest;
+using namespace sk_gpu_test;
 
 DEFINE_bool2(extendedTest, x, false, "run extended tests for pathOps.");
 
 // need to explicitly declare this, or we get some weird infinite loop llist
 template TestRegistry* TestRegistry::gHead;
+void (*gVerboseFinalize)() = nullptr;
 
 // The threads report back to this object when they are done.
 class Status {
@@ -72,15 +72,14 @@ private:
     const int fTotal;
 };
 
-// Deletes self when run.
-class SkTestRunnable : public SkRunnable {
+class SkTestRunnable {
 public:
     SkTestRunnable(const Test& test,
                    Status* status,
-                   GrContextFactory* grContextFactory = NULL)
+                   GrContextFactory* grContextFactory = nullptr)
         : fTest(test), fStatus(status), fGrContextFactory(grContextFactory) {}
 
-  virtual void run() {
+  void operator()() {
       struct TestReporter : public skiatest::Reporter {
       public:
           TestReporter() : fError(false), fTestCount(0) {}
@@ -97,15 +96,14 @@ public:
           int fTestCount;
       } reporter;
 
-      const SkMSec start = SkTime::GetMSecs();
+      const Timer timer;
       fTest.proc(&reporter, fGrContextFactory);
-      SkMSec elapsed = SkTime::GetMSecs() - start;
+      SkMSec elapsed = timer.elapsedMsInt();
       if (reporter.fError) {
           fStatus->reportFailure();
       }
       fStatus->endTest(fTest.name, !reporter.fError, elapsed,
                        reporter.fTestCount);
-      SkDELETE(this);
   }
 
 private:
@@ -131,12 +129,6 @@ int test_main();
 int test_main() {
     SetupCrashHandler();
 
-#if SK_ENABLE_INST_COUNT
-    if (FLAGS_leaks) {
-        gPrintInstCount = true;
-    }
-#endif
-
     SkAutoGraphics ag;
 
     {
@@ -160,7 +152,6 @@ int test_main() {
 #else
         header.append(" SK_RELEASE");
 #endif
-        header.appendf(" skia_arch_width=%d", (int)sizeof(void*) * 8);
         if (FLAGS_veryVerbose) {
             header.appendf("\n");
         }
@@ -197,11 +188,11 @@ int test_main() {
         } else if (test.needsGpu) {
             gpuTests.push_back(&test);
         } else {
-            cpuTests.add(SkNEW_ARGS(SkTestRunnable, (test, &status)));
+            cpuTests.add(SkTestRunnable(test, &status));
         }
     }
 
-    GrContextFactory* grContextFactoryPtr = NULL;
+    GrContextFactory* grContextFactoryPtr = nullptr;
 #if SK_SUPPORT_GPU
     // Give GPU tests a context factory if that makes sense on this machine.
     GrContextFactory grContextFactory;
@@ -211,8 +202,7 @@ int test_main() {
 
     // Run GPU tests on this thread.
     for (int i = 0; i < gpuTests.count(); i++) {
-        SkNEW_ARGS(SkTestRunnable, (*gpuTests[i], &status, grContextFactoryPtr))
-                ->run();
+        SkTestRunnable(*gpuTests[i], &status, grContextFactoryPtr)();
     }
 
     // Block until threaded tests finish.
@@ -223,6 +213,9 @@ int test_main() {
                 "\nFinished %d tests, %d failures, %d skipped. "
                 "(%d internal tests)",
                 toRun, status.failCount(), skipCount, status.testCount());
+        if (gVerboseFinalize) {
+            (*gVerboseFinalize)();
+        }
     }
 
     SkDebugf("\n");

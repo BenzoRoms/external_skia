@@ -12,16 +12,51 @@
 #include "SkTypeface.h"
 #include "GrPathRange.h"
 
+const GrUserStencilSettings& GrPathRendering::GetStencilPassSettings(FillType fill) {
+    switch (fill) {
+        default:
+            SkFAIL("Unexpected path fill.");
+        case GrPathRendering::kWinding_FillType: {
+            constexpr static GrUserStencilSettings kWindingStencilPass(
+                GrUserStencilSettings::StaticInit<
+                    0xffff,
+                    GrUserStencilTest::kAlwaysIfInClip,
+                    0xffff,
+                    GrUserStencilOp::kIncWrap,
+                    GrUserStencilOp::kIncWrap,
+                    0xffff>()
+            );
+            return kWindingStencilPass;
+        }
+        case GrPathRendering::kEvenOdd_FillType: {
+            constexpr static GrUserStencilSettings kEvenOddStencilPass(
+                GrUserStencilSettings::StaticInit<
+                    0xffff,
+                    GrUserStencilTest::kAlwaysIfInClip,
+                    0xffff,
+                    GrUserStencilOp::kInvert,
+                    GrUserStencilOp::kInvert,
+                    0xffff>()
+            );
+            return kEvenOddStencilPass;
+        }
+    }
+}
+
 class GlyphGenerator : public GrPathRange::PathGenerator {
 public:
-    GlyphGenerator(const SkTypeface& typeface, const SkDescriptor& desc)
-        : fDesc(desc.copy()),
-          fScalerContext(typeface.createScalerContext(fDesc)) {
-        fFlipMatrix.setScale(1, -1);
-    }
+    GlyphGenerator(const SkTypeface& typeface, const SkScalerContextEffects& effects,
+                   const SkDescriptor& desc)
+        : fScalerContext(typeface.createScalerContext(effects, &desc))
+#ifdef SK_DEBUG
+        , fDesc(desc.copy())
+#endif
+    {}
 
     virtual ~GlyphGenerator() {
+#ifdef SK_DEBUG
         SkDescriptor::Free(fDesc);
+#endif
     }
 
     int getNumPaths() override {
@@ -34,30 +69,29 @@ public:
         fScalerContext->getMetrics(&skGlyph);
 
         fScalerContext->getPath(skGlyph, out);
-        out->transform(fFlipMatrix); // Load glyphs with the inverted y-direction.
     }
-
-    bool isEqualTo(const SkDescriptor& desc) const override {
-        return fDesc->equals(desc);
-    }
-
+#ifdef SK_DEBUG
+    bool isEqualTo(const SkDescriptor& desc) const override { return *fDesc == desc; }
+#endif
 private:
-    SkDescriptor* const fDesc;
     const SkAutoTDelete<SkScalerContext> fScalerContext;
-    SkMatrix fFlipMatrix;
+#ifdef SK_DEBUG
+    SkDescriptor* const fDesc;
+#endif
 };
 
 GrPathRange* GrPathRendering::createGlyphs(const SkTypeface* typeface,
+                                           const SkScalerContextEffects& effects,
                                            const SkDescriptor* desc,
-                                           const SkStrokeRec& stroke) {
-    if (NULL == typeface) {
+                                           const GrStyle& style) {
+    if (nullptr == typeface) {
         typeface = SkTypeface::GetDefaultTypeface();
-        SkASSERT(NULL != typeface);
+        SkASSERT(nullptr != typeface);
     }
 
     if (desc) {
-        SkAutoTUnref<GlyphGenerator> generator(SkNEW_ARGS(GlyphGenerator, (*typeface, *desc)));
-        return this->createPathRange(generator, stroke);
+        SkAutoTUnref<GlyphGenerator> generator(new GlyphGenerator(*typeface, effects, *desc));
+        return this->createPathRange(generator, style);
     }
 
     SkScalerContextRec rec;
@@ -73,7 +107,10 @@ GrPathRange* GrPathRendering::createGlyphs(const SkTypeface* typeface,
     genericDesc->init();
     genericDesc->addEntry(kRec_SkDescriptorTag, sizeof(rec), &rec);
     genericDesc->computeChecksum();
+    
+    // No effects, so we make a dummy struct
+    SkScalerContextEffects noEffects;
 
-    SkAutoTUnref<GlyphGenerator> generator(SkNEW_ARGS(GlyphGenerator, (*typeface, *genericDesc)));
-    return this->createPathRange(generator, stroke);
+    SkAutoTUnref<GlyphGenerator> generator(new GlyphGenerator(*typeface, noEffects, *genericDesc));
+    return this->createPathRange(generator, style);
 }

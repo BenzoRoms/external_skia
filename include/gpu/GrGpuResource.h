@@ -11,11 +11,11 @@
 #include "GrResourceKey.h"
 #include "GrTypesPriv.h"
 #include "SkData.h"
-#include "SkInstCnt.h"
 
 class GrContext;
 class GrGpu;
 class GrResourceCache;
+class SkTraceMemoryDump;
 
 /**
  * Base class for GrGpuResource. Handles the various types of refs we need. Separated out as a base
@@ -46,8 +46,6 @@ class GrResourceCache;
  */
 template <typename DERIVED> class GrIORef : public SkNoncopyable {
 public:
-    SK_DECLARE_INST_COUNT(GrIORef)
-
     // Some of the signatures are written to mirror SkRefCnt so that GrGpuResource can work with
     // templated helper classes (e.g. SkAutoTUnref). However, we have different categories of
     // refs (e.g. pending reads). We also don't require thread safety as GrCacheable objects are
@@ -59,7 +57,7 @@ public:
 
     void unref() const {
         this->validate();
-        
+
         if (!(--fRefCnt)) {
             if (!static_cast<const DERIVED*>(this)->notifyRefCountIsZero()) {
                 return;
@@ -141,27 +139,6 @@ private:
  */
 class SK_API GrGpuResource : public GrIORef<GrGpuResource> {
 public:
-    SK_DECLARE_INST_COUNT(GrGpuResource)
-
-    enum LifeCycle {
-        /**
-         * The resource is cached and owned by Skia. Resources with this status may be kept alive
-         * by the cache as either scratch or unique resources even when there are no refs to them.
-         * The cache may release them whenever there are no refs.
-         */
-        kCached_LifeCycle,
-        /**
-         * The resource is uncached. As soon as there are no more refs to it, it is released. Under
-         * the hood the cache may opaquely recycle it as a cached resource.
-         */
-        kUncached_LifeCycle,
-        /**
-         * Similar to uncached, but Skia does not manage the lifetime of the underlying backend
-         * 3D API object(s). The client is responsible for freeing those. Used to inject client-
-         * created GPU resources into Skia (e.g. to render to a client-created texture).
-         */
-        kWrapped_LifeCycle,
-    };
 
     /**
      * Tests whether a object has been abandoned or released. All objects will
@@ -248,12 +225,24 @@ public:
      */
     void abandon();
 
-protected:
-    // This must be called by every GrGpuObject. It should be called once the object is fully
-    // initialized (i.e. not in a base class constructor).
-    void registerWithCache();
+    /**
+     * Dumps memory usage information for this GrGpuResource to traceMemoryDump.
+     * Typically, subclasses should not need to override this, and should only
+     * need to override setMemoryBacking.
+     **/
+    virtual void dumpMemoryStatistics(SkTraceMemoryDump* traceMemoryDump) const;
 
-    GrGpuResource(GrGpu*, LifeCycle);
+protected:
+    // This must be called by every non-wrapped GrGpuObject. It should be called once the object is
+    // fully initialized (i.e. only from the constructors of the final class).
+    void registerWithCache(SkBudgeted);
+
+    // This must be called by every GrGpuObject that references any wrapped backend objects. It
+    // should be called once the object is fully initialized (i.e. only from the constructors of the
+    // final class).
+    void registerWithCacheWrapped();
+
+    GrGpuResource(GrGpu*);
     virtual ~GrGpuResource();
 
     GrGpu* getGpu() const { return fGpu; }
@@ -265,8 +254,6 @@ protected:
         backend API calls should be made. */
     virtual void onAbandon() { }
 
-    bool isWrapped() const { return kWrapped_LifeCycle == fLifeCycle; }
-
     /**
      * This entry point should be called whenever gpuMemorySize() should report a different size.
      * The cache will call gpuMemorySize() to update the current size of the resource.
@@ -274,12 +261,20 @@ protected:
     void didChangeGpuMemorySize() const;
 
     /**
-     * Optionally called by the GrGpuResource subclass if the resource can be used as scratch.
-     * By default resources are not usable as scratch. This should only be called once.
+     * Allows subclasses to add additional backing information to the SkTraceMemoryDump. Called by
+     * onMemoryDump. The default implementation adds no backing information.
      **/
-    void setScratchKey(const GrScratchKey& scratchKey);
+    virtual void setMemoryBacking(SkTraceMemoryDump*, const SkString&) const {}
 
 private:
+    /**
+     * Called by the registerWithCache if the resource is available to be used as scratch.
+     * Resource subclasses should override this if the instances should be recycled as scratch
+     * resources and populate the scratchKey with the key.
+     * By default resources are not recycled as scratch.
+     **/
+    virtual void computeScratchKey(GrScratchKey*) const { };
+
     /**
      * Frees the object in the underlying 3D API. Called by CacheAccess.
      */
@@ -318,7 +313,8 @@ private:
     GrGpu*                      fGpu;
     mutable size_t              fGpuMemorySize;
 
-    LifeCycle                   fLifeCycle;
+    SkBudgeted                  fBudgeted;
+    bool                        fRefsWrappedObjects;
     const uint32_t              fUniqueID;
 
     SkAutoTUnref<const SkData>  fData;

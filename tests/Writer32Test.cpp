@@ -31,8 +31,8 @@ static void test_string_null(skiatest::Reporter* reporter) {
     uint8_t storage[8];
     SkWriter32 writer(storage, sizeof(storage));
 
-    // Can we write NULL?
-    writer.writeString(NULL);
+    // Can we write nullptr?
+    writer.writeString(nullptr);
     const int32_t expected[] = { 0x0, 0x0 };
     check_contents(reporter, writer, expected, sizeof(expected));
 }
@@ -144,16 +144,13 @@ static void test2(skiatest::Reporter* reporter, SkWriter32* writer) {
 
 static void testWritePad(skiatest::Reporter* reporter, SkWriter32* writer) {
     // Create some random data to write.
-    const size_t dataSize = 10<<2;
-    SkASSERT(SkIsAlign4(dataSize));
+    const size_t dataSize = 10;
 
-    SkAutoMalloc originalData(dataSize);
+    SkAutoTMalloc<uint32_t> originalData(dataSize);
     {
         SkRandom rand(0);
-        uint32_t* ptr = static_cast<uint32_t*>(originalData.get());
-        uint32_t* stop = ptr + (dataSize>>2);
-        while (ptr < stop) {
-            *ptr++ = rand.nextU();
+        for (size_t i = 0; i < dataSize; i++) {
+            originalData[(int) i] = rand.nextU();
         }
 
         // Write  the random data to the writer at different lengths for
@@ -235,19 +232,6 @@ DEF_TEST(Writer32_dynamic, reporter) {
     testOverwriteT(reporter, &writer);
 }
 
-DEF_TEST(Writer32_contiguous, reporter) {
-    uint32_t storage[256];
-    SkWriter32 writer;
-    writer.reset(storage, sizeof(storage));
-    // This write is small enough to fit in storage, so it's contiguous.
-    test1(reporter, &writer);
-    REPORTER_ASSERT(reporter, writer.contiguousArray() != NULL);
-
-    // Everything other aspect of contiguous/non-contiguous is an
-    // implementation detail, not part of the public contract for
-    // SkWriter32, and so not tested here.
-}
-
 DEF_TEST(Writer32_small, reporter) {
     SkSWriter32<8 * sizeof(intptr_t)> writer;
     test1(reporter, &writer);
@@ -281,3 +265,44 @@ DEF_TEST(Writer32_misc, reporter) {
     test_rewind(reporter);
 }
 
+DEF_TEST(Writer32_data, reporter) {
+    const char* str = "0123456789";
+    SkAutoTUnref<SkData> data0(SkData::NewWithCString(str));
+    SkAutoTUnref<SkData> data1(SkData::NewEmpty());
+
+    const size_t sizes[] = {
+        SkWriter32::WriteDataSize(nullptr),
+        SkWriter32::WriteDataSize(data0),
+        SkWriter32::WriteDataSize(data1),
+    };
+
+    SkSWriter32<1000> writer;
+    size_t sizeWritten = 0;
+
+    writer.writeData(nullptr);
+    sizeWritten += sizes[0];
+    REPORTER_ASSERT(reporter, sizeWritten == writer.bytesWritten());
+
+    writer.writeData(data0);
+    sizeWritten += sizes[1];
+    REPORTER_ASSERT(reporter, sizeWritten == writer.bytesWritten());
+
+    writer.writeData(data1);
+    sizeWritten += sizes[2];
+    REPORTER_ASSERT(reporter, sizeWritten == writer.bytesWritten());
+
+    auto result(writer.snapshotAsData());
+
+    SkReader32 reader(result->data(), result->size());
+    auto d0(reader.readData()),
+         d1(reader.readData()),
+         d2(reader.readData());
+
+    REPORTER_ASSERT(reporter, 0 == d0->size());
+    REPORTER_ASSERT(reporter, strlen(str)+1 == d1->size());
+    REPORTER_ASSERT(reporter, !memcmp(str, d1->data(), strlen(str)+1));
+    REPORTER_ASSERT(reporter, 0 == d2->size());
+
+    REPORTER_ASSERT(reporter, reader.offset() == sizeWritten);
+    REPORTER_ASSERT(reporter, reader.eof());
+}

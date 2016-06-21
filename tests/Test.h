@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -12,7 +11,16 @@
 #include "SkTRegistry.h"
 #include "SkTypes.h"
 
+#if SK_SUPPORT_GPU
+#include "GrContextFactory.h"
+#else
+namespace sk_gpu_test {
 class GrContextFactory;
+class ContextInfo;
+class GLTestContext;
+}  // namespace sk_gpu_test
+class GrContext;
+#endif
 
 namespace skiatest {
 
@@ -40,7 +48,7 @@ public:
 #define REPORT_FAILURE(reporter, cond, message) \
     reporter->reportFailed(skiatest::Failure(__FILE__, __LINE__, cond, message))
 
-typedef void (*TestProc)(skiatest::Reporter*, GrContextFactory*);
+typedef void (*TestProc)(skiatest::Reporter*, sk_gpu_test::GrContextFactory*);
 
 struct Test {
     Test(const char* n, bool g, TestProc p) : name(n), needsGpu(g), proc(p) {}
@@ -69,6 +77,44 @@ typedef SkTRegistry<Test> TestRegistry;
         ...
     }
 */
+
+#if SK_SUPPORT_GPU
+using GrContextFactoryContextType = sk_gpu_test::GrContextFactory::ContextType;
+#else
+using GrContextFactoryContextType = int;
+#endif
+
+typedef void GrContextTestFn(Reporter*, const sk_gpu_test::ContextInfo&);
+typedef bool GrContextTypeFilterFn(GrContextFactoryContextType);
+
+extern bool IsGLContextType(GrContextFactoryContextType);
+extern bool IsVulkanContextType(GrContextFactoryContextType);
+extern bool IsRenderingGLContextType(GrContextFactoryContextType);
+extern bool IsNullGLContextType(GrContextFactoryContextType);
+
+void RunWithGPUTestContexts(GrContextTestFn*, GrContextTypeFilterFn*,
+                            Reporter*, sk_gpu_test::GrContextFactory*);
+
+/** Timer provides wall-clock duration since its creation. */
+class Timer {
+public:
+    /** Starts the timer. */
+    Timer();
+
+    /** Nanoseconds since creation. */
+    double elapsedNs() const;
+
+    /** Milliseconds since creation. */
+    double elapsedMs() const;
+
+    /** Milliseconds since creation as an integer.
+        Behavior is undefined for durations longer than SK_MSecMax.
+    */
+    SkMSec elapsedMsInt() const;
+private:
+    double fStartNanos;
+};
+
 }  // namespace skiatest
 
 #define REPORTER_ASSERT(r, cond)                  \
@@ -90,16 +136,60 @@ typedef SkTRegistry<Test> TestRegistry;
         REPORT_FAILURE(r, "", SkStringPrintf(__VA_ARGS__)); \
     } while (0)
 
-#define DEF_TEST(name, reporter)                                     \
-    static void test_##name(skiatest::Reporter*, GrContextFactory*); \
-    skiatest::TestRegistry name##TestRegistry(                       \
-            skiatest::Test(#name, false, test_##name));              \
-    void test_##name(skiatest::Reporter* reporter, GrContextFactory*)
+#define INFOF(REPORTER, ...)         \
+    do {                             \
+        if ((REPORTER)->verbose()) { \
+            SkDebugf(__VA_ARGS__);   \
+        }                            \
+    } while (0)
 
-#define DEF_GPUTEST(name, reporter, factory)                         \
-    static void test_##name(skiatest::Reporter*, GrContextFactory*); \
-    skiatest::TestRegistry name##TestRegistry(                       \
-            skiatest::Test(#name, true, test_##name));               \
-    void test_##name(skiatest::Reporter* reporter, GrContextFactory* factory)
+#define DEF_TEST(name, reporter)                                                  \
+    static void test_##name(skiatest::Reporter*, sk_gpu_test::GrContextFactory*); \
+    skiatest::TestRegistry name##TestRegistry(                                    \
+            skiatest::Test(#name, false, test_##name));                           \
+    void test_##name(skiatest::Reporter* reporter, sk_gpu_test::GrContextFactory*)
+
+
+#define DEF_GPUTEST(name, reporter, factory)                                                 \
+    static void test_##name(skiatest::Reporter*, sk_gpu_test::GrContextFactory*);            \
+    skiatest::TestRegistry name##TestRegistry(                                               \
+            skiatest::Test(#name, true, test_##name));                                       \
+    void test_##name(skiatest::Reporter* reporter, sk_gpu_test::GrContextFactory* factory)
+
+#define DEF_GPUTEST_FOR_CONTEXTS(name, context_filter, reporter, context_info)            \
+    static void test_##name(skiatest::Reporter*,                                          \
+                            const sk_gpu_test::ContextInfo& context_info);                \
+    static void test_gpu_contexts_##name(skiatest::Reporter* reporter,                    \
+                                         sk_gpu_test::GrContextFactory* factory) {        \
+        skiatest::RunWithGPUTestContexts(test_##name, context_filter, reporter, factory); \
+    }                                                                                     \
+    skiatest::TestRegistry name##TestRegistry(                                            \
+            skiatest::Test(#name, true, test_gpu_contexts_##name));                       \
+    void test_##name(skiatest::Reporter* reporter,                                        \
+                     const sk_gpu_test::ContextInfo& context_info)
+
+#define DEF_GPUTEST_FOR_ALL_CONTEXTS(name, reporter, context_info)                          \
+        DEF_GPUTEST_FOR_CONTEXTS(name, nullptr, reporter, context_info)
+#define DEF_GPUTEST_FOR_RENDERING_CONTEXTS(name, reporter, context_info)                    \
+        DEF_GPUTEST_FOR_CONTEXTS(name, sk_gpu_test::GrContextFactory::IsRenderingContext,   \
+                                 reporter, context_info)
+#define DEF_GPUTEST_FOR_ALL_GL_CONTEXTS(name, reporter, context_info)                       \
+        DEF_GPUTEST_FOR_CONTEXTS(name, &skiatest::IsGLContextType, reporter, context_info)
+#define DEF_GPUTEST_FOR_GL_RENDERING_CONTEXTS(name, reporter, context_info)                 \
+        DEF_GPUTEST_FOR_CONTEXTS(name, &skiatest::IsRenderingGLContextType, reporter, context_info)
+#define DEF_GPUTEST_FOR_NULLGL_CONTEXT(name, reporter, context_info)                        \
+        DEF_GPUTEST_FOR_CONTEXTS(name, &skiatest::IsNullGLContextType, reporter, context_info)
+#define DEF_GPUTEST_FOR_VULKAN_CONTEXT(name, reporter, context_info)                        \
+        DEF_GPUTEST_FOR_CONTEXTS(name, &skiatest::IsVulkanContextType, reporter, context_info)
+
+#define REQUIRE_PDF_DOCUMENT(TEST_NAME, REPORTER)                          \
+    do {                                                                   \
+        SkDynamicMemoryWStream testStream;                                 \
+        sk_sp<SkDocument> testDoc(SkDocument::MakePDF(&testStream));       \
+        if (!testDoc) {                                                    \
+            INFOF(REPORTER, "PDF disabled; %s test skipped.", #TEST_NAME); \
+            return;                                                        \
+        }                                                                  \
+    } while (false)
 
 #endif

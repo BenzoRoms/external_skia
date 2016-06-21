@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2006 The Android Open Source Project
  *
@@ -28,7 +27,7 @@ void SkSVGClipPath::translate(SkSVGParser& parser, bool defState) {
     SkSVGElement* child = *fChildren.begin();
     SkASSERT(child->getType() == SkSVGType_Use);
     SkSVGUse* use = (SkSVGUse*) child;
-    SkSVGElement* ref = NULL;
+    SkSVGElement* ref = nullptr;
     const char* refStr = &use->f_xlink_href.c_str()[1];
     SkASSERT(parser.getIDs().find(refStr, &ref));
     SkASSERT(ref);

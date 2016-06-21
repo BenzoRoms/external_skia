@@ -4,6 +4,9 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+#ifndef SkIntersectionHelper_DEFINED
+#define SkIntersectionHelper_DEFINED
+
 #include "SkOpContour.h"
 #include "SkOpSegment.h"
 #include "SkPath.h"
@@ -25,7 +28,7 @@ public:
 
     bool advance() {
         fSegment = fSegment->next();
-        return fSegment != NULL;
+        return fSegment != nullptr;
     }
 
     SkScalar bottom() const {
@@ -76,7 +79,7 @@ public:
 
     bool startAfter(const SkIntersectionHelper& after) {
         fSegment = after.fSegment->next();
-        return fSegment != NULL;
+        return fSegment != nullptr;
     }
 
     SkScalar top() const {
@@ -106,3 +109,5 @@ public:
 private:
     SkOpSegment* fSegment;
 };
+
+#endif

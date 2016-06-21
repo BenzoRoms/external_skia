@@ -9,7 +9,7 @@
 #include "Test.h"
 
 #if SK_SUPPORT_GPU
-#include "GrContextFactory.h"
+#include "GrContext.h"
 #endif
 #include "SkImage.h"
 #include "SkSurface.h"
@@ -19,7 +19,7 @@
 static void test_flatten(skiatest::Reporter* reporter, const SkImageInfo& info) {
     // just need a safe amount of storage, but ensure that it is 4-byte aligned.
     int32_t storage[(sizeof(SkImageInfo)*2) / sizeof(int32_t)];
-    SkWriteBuffer wb(storage, sizeof(storage));
+    SkBinaryWriteBuffer wb(storage, sizeof(storage));
     info.flatten(wb);
     SkASSERT(wb.bytesWritten() < sizeof(storage));
 
@@ -48,50 +48,34 @@ DEF_TEST(ImageInfo_flattening, reporter) {
     }
 }
 
-static void check_isopaque(skiatest::Reporter* reporter, SkSurface* surface, bool expectedOpaque) {
-    SkAutoTUnref<SkImage> image(surface->newImageSnapshot());
+static void check_isopaque(skiatest::Reporter* reporter, const sk_sp<SkSurface>& surface,
+                           bool expectedOpaque) {
+    sk_sp<SkImage> image(surface->makeImageSnapshot());
     REPORTER_ASSERT(reporter, image->isOpaque() == expectedOpaque);
 }
 
 DEF_TEST(ImageIsOpaqueTest, reporter) {
     SkImageInfo infoTransparent = SkImageInfo::MakeN32Premul(5, 5);
-    SkAutoTUnref<SkSurface> surfaceTransparent(SkSurface::NewRaster(infoTransparent));
+    auto surfaceTransparent(SkSurface::MakeRaster(infoTransparent));
     check_isopaque(reporter, surfaceTransparent, false);
 
     SkImageInfo infoOpaque = SkImageInfo::MakeN32(5, 5, kOpaque_SkAlphaType);
-    SkAutoTUnref<SkSurface> surfaceOpaque(SkSurface::NewRaster(infoOpaque));
+    auto surfaceOpaque(SkSurface::MakeRaster(infoOpaque));
     check_isopaque(reporter, surfaceOpaque, true);
 }
 
 #if SK_SUPPORT_GPU
 
-DEF_GPUTEST(ImageIsOpaqueTest_GPU, reporter, factory) {
-    for (int i = 0; i < GrContextFactory::kGLContextTypeCnt; ++i) {
-        GrContextFactory::GLContextType glCtxType = (GrContextFactory::GLContextType) i;
+DEF_GPUTEST_FOR_GL_RENDERING_CONTEXTS(ImageIsOpaqueTest_Gpu, reporter, ctxInfo) {
+    GrContext* context = ctxInfo.grContext();
+    SkImageInfo infoTransparent = SkImageInfo::MakeN32Premul(5, 5);
+    auto surfaceTransparent(SkSurface::MakeRenderTarget(context, SkBudgeted::kNo, infoTransparent));
+    check_isopaque(reporter, surfaceTransparent, false);
 
-        if (!GrContextFactory::IsRenderingGLContext(glCtxType)) {
-            continue;
-        }
+    SkImageInfo infoOpaque = SkImageInfo::MakeN32(5, 5, kOpaque_SkAlphaType);
+    auto surfaceOpaque(SkSurface::MakeRenderTarget(context,SkBudgeted::kNo, infoOpaque));
 
-        GrContext* context = factory->get(glCtxType);
-
-        if (NULL == context) {
-            continue;
-        }
-
-        SkImageInfo infoTransparent = SkImageInfo::MakeN32Premul(5, 5);
-        SkAutoTUnref<SkSurface> surfaceTransparent(
-            SkSurface::NewRenderTarget(context,SkSurface::kNo_Budgeted, infoTransparent));
-        check_isopaque(reporter, surfaceTransparent, false);
-
-        SkImageInfo infoOpaque = SkImageInfo::MakeN32(5, 5, kOpaque_SkAlphaType);
-        SkAutoTUnref<SkSurface> surfaceOpaque(
-            SkSurface::NewRenderTarget(context,SkSurface::kNo_Budgeted, infoOpaque));
-#if 0
-        // this is failing right now : TODO fix me
-        check_isopaque(reporter, surfaceOpaque, true);
-#endif
-    }
+    check_isopaque(reporter, surfaceOpaque, true);
 }
 
 #endif

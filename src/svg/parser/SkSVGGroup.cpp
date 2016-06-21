@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2006 The Android Open Source Project
  *
@@ -17,10 +16,10 @@ SkSVGGroup::SkSVGGroup() {
 SkSVGElement* SkSVGGroup::getGradient() {
     for (SkSVGElement** ptr = fChildren.begin(); ptr < fChildren.end(); ptr++) {
         SkSVGElement* result = (*ptr)->getGradient();
-        if (result != NULL)
+        if (result != nullptr)
             return result;
     }
-    return NULL;
+    return nullptr;
 }
 
 bool SkSVGGroup::isDef() {

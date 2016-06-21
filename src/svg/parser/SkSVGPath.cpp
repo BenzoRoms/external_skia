@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2006 The Android Open Source Project
  *
@@ -21,7 +20,7 @@ void SkSVGPath::translate(SkSVGParser& parser, bool defState) {
     INHERITED::translate(parser, defState);
     bool hasMultiplePaths = false;
     const char* firstZ = strchr(f_d.c_str(), 'z');
-    if (firstZ != NULL) {
+    if (firstZ != nullptr) {
         firstZ++; // skip over 'z'
         while (*firstZ == ' ')
             firstZ++;

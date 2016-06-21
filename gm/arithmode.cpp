@@ -31,9 +31,8 @@ static SkBitmap make_src() {
         SK_ColorTRANSPARENT, SK_ColorGREEN, SK_ColorCYAN,
         SK_ColorRED, SK_ColorMAGENTA, SK_ColorWHITE,
     };
-    SkShader* s = SkGradientShader::CreateLinear(pts, colors, NULL, SK_ARRAY_COUNT(colors),
-                                                 SkShader::kClamp_TileMode);
-    paint.setShader(s)->unref();
+    paint.setShader(SkGradientShader::MakeLinear(pts, colors, nullptr, SK_ARRAY_COUNT(colors),
+                                                 SkShader::kClamp_TileMode));
     canvas.drawPaint(paint);
     return bm;
 }
@@ -44,11 +43,11 @@ static SkBitmap make_dst() {
     SkPaint paint;
     SkPoint pts[] = { {0, SkIntToScalar(HH)}, {SkIntToScalar(WW), 0} };
     SkColor colors[] = {
-        SK_ColorBLUE, SK_ColorYELLOW, SK_ColorBLACK, SK_ColorGREEN, SK_ColorGRAY
+        SK_ColorBLUE, SK_ColorYELLOW, SK_ColorBLACK, SK_ColorGREEN,
+        sk_tool_utils::color_to_565(SK_ColorGRAY)
     };
-    SkShader* s = SkGradientShader::CreateLinear(pts, colors, NULL, SK_ARRAY_COUNT(colors),
-                                                 SkShader::kClamp_TileMode);
-    paint.setShader(s)->unref();
+    paint.setShader(SkGradientShader::MakeLinear(pts, colors, nullptr, SK_ARRAY_COUNT(colors),
+                                                 SkShader::kClamp_TileMode));
     canvas.drawPaint(paint);
     return bm;
 }
@@ -77,7 +76,7 @@ protected:
         return SkString("arithmode");
     }
 
-    virtual SkISize onISize() { return SkISize::Make(640, 480); }
+    virtual SkISize onISize() { return SkISize::Make(640, 572); }
 
     virtual void onDraw(SkCanvas* canvas) {
         SkBitmap src = make_src();
@@ -104,21 +103,52 @@ protected:
         SkScalar gap = SkIntToScalar(src.width() + 20);
         while (k < stop) {
             SkScalar x = 0;
-            canvas->drawBitmap(src, x, y, NULL);
+            canvas->drawBitmap(src, x, y, nullptr);
             x += gap;
-            canvas->drawBitmap(dst, x, y, NULL);
+            canvas->drawBitmap(dst, x, y, nullptr);
             x += gap;
             SkRect rect = SkRect::MakeXYWH(x, y, SkIntToScalar(WW), SkIntToScalar(HH));
-            canvas->saveLayer(&rect, NULL);
-            canvas->drawBitmap(dst, x, y, NULL);
-            SkXfermode* xfer = SkArithmeticMode::Create(k[0], k[1], k[2], k[3]);
+            canvas->saveLayer(&rect, nullptr);
+            canvas->drawBitmap(dst, x, y, nullptr);
             SkPaint paint;
-            paint.setXfermode(xfer)->unref();
+            paint.setXfermode(SkArithmeticMode::Make(k[0], k[1], k[2], k[3]));
             canvas->drawBitmap(src, x, y, &paint);
             canvas->restore();
             x += gap;
             show_k_text(canvas, x, y, k);
             k += 4;
+            y += SkIntToScalar(src.height() + 12);
+        }
+
+        // Draw two special cases to test enforcePMColor. In these cases, we
+        // draw the dst bitmap twice, the first time it is halved and inverted,
+        // leading to invalid premultiplied colors. If we enforcePMColor, these
+        // invalid values should be clamped, and will not contribute to the
+        // second draw.
+        for (int i = 0; i < 2; i++) {
+            const bool enforcePMColor = (i == 0);
+            SkScalar x = gap;
+            canvas->drawBitmap(dst, x, y, nullptr);
+            x += gap;
+            SkRect rect = SkRect::MakeXYWH(x, y, SkIntToScalar(WW), SkIntToScalar(HH));
+            canvas->saveLayer(&rect, nullptr);
+            SkPaint paint1;
+            paint1.setXfermode(SkArithmeticMode::Make(0, -one / 2, 0, 1, enforcePMColor));
+            canvas->drawBitmap(dst, x, y, &paint1);
+            SkPaint paint2;
+            paint2.setXfermode(SkArithmeticMode::Make(0, one / 2, -one, 1));
+            canvas->drawBitmap(dst, x, y, &paint2);
+            canvas->restore();
+            x += gap;
+
+            // Label
+            SkPaint paint;
+            paint.setTextSize(SkIntToScalar(24));
+            paint.setAntiAlias(true);
+            sk_tool_utils::set_portable_typeface(&paint);
+            SkString str(enforcePMColor ? "enforcePM" : "no enforcePM");
+            canvas->drawText(str.c_str(), str.size(), x, y + paint.getTextSize(), paint);
+
             y += SkIntToScalar(src.height() + 12);
         }
     }
@@ -129,5 +159,4 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-static skiagm::GM* MyFactory(void*) { return new ArithmodeGM; }
-static skiagm::GMRegistry reg(MyFactory);
+DEF_GM( return new ArithmodeGM; )

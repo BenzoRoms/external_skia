@@ -13,7 +13,7 @@
 static SkScalar kSize   = 80;
 static SkScalar kInset  = 10;
 static SkColor  kColor1 = SkColorSetARGB(0xff, 0xff, 0xff, 0);
-static SkColor  kColor2 = SkColorSetARGB(0xff, 0x80, 0xff, 0);
+static SkColor  kColor2 = SkColorSetARGB(0xff, 0x82, 0xff, 0);
 
 static void draw_label(SkCanvas* canvas, const char* label,
                        const SkPoint& offset) {
@@ -26,9 +26,8 @@ static void draw_label(SkCanvas* canvas, const char* label,
                      paint);
 }
 
-static void draw_scene(SkCanvas* canvas, SkColorFilter* filter,
-                       SkXfermode::Mode mode, SkShader* s1,
-                       SkShader* s2) {
+static void draw_scene(SkCanvas* canvas, const sk_sp<SkColorFilter>& filter, SkXfermode::Mode mode,
+                       const sk_sp<SkShader>& s1, const sk_sp<SkShader>& s2) {
     SkPaint paint;
     paint.setAntiAlias(true);
     SkRect r, c, bounds = SkRect::MakeWH(kSize, kSize);
@@ -38,7 +37,7 @@ static void draw_scene(SkCanvas* canvas, SkColorFilter* filter,
     paint.setARGB(0x20, 0, 0, 0xff);
     canvas->drawRect(bounds, paint);
 
-    canvas->saveLayer(&bounds, NULL);
+    canvas->saveLayer(&bounds, nullptr);
 
     r = bounds;
     r.inset(kInset, 0);
@@ -84,17 +83,11 @@ public:
         SkPoint  g2Points[] = { { 0, 0 }, { kSize, 0   } };
         SkScalar pos[] = { 0.2f, 1.0f };
 
-        fFilter.reset(SkLumaColorFilter::Create());
-        fGr1.reset(SkGradientShader::CreateLinear(g1Points,
-                                                  g1Colors,
-                                                  pos,
-                                                  SK_ARRAY_COUNT(g1Colors),
-                                                  SkShader::kClamp_TileMode));
-        fGr2.reset(SkGradientShader::CreateLinear(g2Points,
-                                                  g2Colors,
-                                                  pos,
-                                                  SK_ARRAY_COUNT(g2Colors),
-                                                  SkShader::kClamp_TileMode));
+        fFilter = SkLumaColorFilter::Make();
+        fGr1 = SkGradientShader::MakeLinear(g1Points, g1Colors, pos, SK_ARRAY_COUNT(g1Colors),
+                                            SkShader::kClamp_TileMode);
+        fGr2 = SkGradientShader::MakeLinear(g2Points, g2Colors, pos, SK_ARRAY_COUNT(g2Colors),
+                                            SkShader::kClamp_TileMode);
     }
 
 protected:
@@ -116,12 +109,12 @@ protected:
                                      SkXfermode::kDstIn_Mode,
                                    };
         struct {
-            SkShader*   fShader1;
-            SkShader*   fShader2;
+            const sk_sp<SkShader>& fShader1;
+            const sk_sp<SkShader>& fShader2;
         } shaders[] = {
-            { NULL, NULL },
-            { NULL, fGr2 },
-            { fGr1, NULL },
+            { nullptr, nullptr },
+            { nullptr, fGr2 },
+            { fGr1, nullptr },
             { fGr1, fGr2 },
         };
 
@@ -144,12 +137,12 @@ protected:
     }
 
 private:
-    SkAutoTUnref<SkColorFilter> fFilter;
-    SkAutoTUnref<SkShader>      fGr1, fGr2;
+    sk_sp<SkColorFilter>    fFilter;
+    sk_sp<SkShader>         fGr1, fGr2;
 
     typedef skiagm::GM INHERITED;
 };
 
 //////////////////////////////////////////////////////////////////////////////
 
-DEF_GM( return SkNEW(LumaFilterGM); )
+DEF_GM(return new LumaFilterGM;)

@@ -34,9 +34,9 @@ void SkBlurDrawLooper::initEffects() {
                     SkBlurMaskFilter::kHighQuality_BlurFlag :
                     SkBlurMaskFilter::kNone_BlurFlag;
 
-        fBlur = SkBlurMaskFilter::Create(kNormal_SkBlurStyle, fSigma, flags);
+        fBlur = SkBlurMaskFilter::Make(kNormal_SkBlurStyle, fSigma, flags);
     } else {
-        fBlur = NULL;
+        fBlur = nullptr;
     }
 
     if (fBlurFlags & kOverrideColor_BlurFlag) {
@@ -44,10 +44,9 @@ void SkBlurDrawLooper::initEffects() {
         // be baked into the blurred mask.
         SkColor opaqueColor = SkColorSetA(fBlurColor, 255);
         //The SrcIn xfer mode will multiply 'color' by the incoming alpha
-        fColorFilter = SkColorFilter::CreateModeFilter(opaqueColor,
-                                                       SkXfermode::kSrcIn_Mode);
+        fColorFilter = SkColorFilter::MakeModeFilter(opaqueColor, SkXfermode::kSrcIn_Mode);
     } else {
-        fColorFilter = NULL;
+        fColorFilter = nullptr;
     }
 }
 
@@ -62,13 +61,13 @@ void SkBlurDrawLooper::init(SkScalar sigma, SkScalar dx, SkScalar dy,
     this->initEffects();
 }
 
-SkFlattenable* SkBlurDrawLooper::CreateProc(SkReadBuffer& buffer) {
+sk_sp<SkFlattenable> SkBlurDrawLooper::CreateProc(SkReadBuffer& buffer) {
     const SkColor color = buffer.readColor();
     const SkScalar sigma = buffer.readScalar();
     const SkScalar dx = buffer.readScalar();
     const SkScalar dy = buffer.readScalar();
     const uint32_t flags = buffer.read32();
-    return Create(color, sigma, dx, dy, flags);
+    return Make(color, sigma, dx, dy, flags);
 }
 
 void SkBlurDrawLooper::flatten(SkWriteBuffer& buffer) const {
@@ -77,11 +76,6 @@ void SkBlurDrawLooper::flatten(SkWriteBuffer& buffer) const {
     buffer.writeScalar(fDx);
     buffer.writeScalar(fDy);
     buffer.write32(fBlurFlags);
-}
-
-SkBlurDrawLooper::~SkBlurDrawLooper() {
-    SkSafeUnref(fBlur);
-    SkSafeUnref(fColorFilter);
 }
 
 bool SkBlurDrawLooper::asABlurShadow(BlurShadowRec* rec) const {
@@ -103,7 +97,7 @@ bool SkBlurDrawLooper::asABlurShadow(BlurShadowRec* rec) const {
 ////////////////////////////////////////////////////////////////////////////////////////
 
 SkDrawLooper::Context* SkBlurDrawLooper::createContext(SkCanvas*, void* storage) const {
-    return SkNEW_PLACEMENT_ARGS(storage, BlurDrawLooperContext, (this));
+    return new (storage) BlurDrawLooperContext(this);
 }
 
 SkBlurDrawLooper::BlurDrawLooperContext::BlurDrawLooperContext(

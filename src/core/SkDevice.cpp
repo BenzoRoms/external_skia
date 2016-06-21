@@ -5,48 +5,40 @@
  * found in the LICENSE file.
  */
 
+#include "SkColorFilter.h"
 #include "SkDevice.h"
-#include "SkDeviceProperties.h"
 #include "SkDraw.h"
 #include "SkDrawFilter.h"
 #include "SkImage_Base.h"
+#include "SkImageFilter.h"
+#include "SkImageFilterCache.h"
 #include "SkMetaData.h"
+#include "SkNinePatchIter.h"
 #include "SkPatchUtils.h"
 #include "SkPathMeasure.h"
 #include "SkRasterClip.h"
+#include "SkRSXform.h"
 #include "SkShader.h"
-#include "SkTextBlob.h"
+#include "SkSpecialImage.h"
+#include "SkTextBlobRunIterator.h"
 #include "SkTextToPathIter.h"
 
-SkBaseDevice::SkBaseDevice()
-    : fLeakyProperties(SkNEW_ARGS(SkDeviceProperties, (SkDeviceProperties::kLegacyLCD_InitType)))
+SkBaseDevice::SkBaseDevice(const SkSurfaceProps& surfaceProps)
+    : fSurfaceProps(surfaceProps)
 #ifdef SK_DEBUG
     , fAttachedToCanvas(false)
 #endif
 {
     fOrigin.setZero();
-    fMetaData = NULL;
+    fMetaData = nullptr;
 }
 
-SkBaseDevice::SkBaseDevice(const SkDeviceProperties& dp)
-    : fLeakyProperties(SkNEW_ARGS(SkDeviceProperties, (dp)))
-#ifdef SK_DEBUG
-    , fAttachedToCanvas(false)
-#endif
-{
-    fOrigin.setZero();
-    fMetaData = NULL;
-}
-
-SkBaseDevice::~SkBaseDevice() {
-    SkDELETE(fLeakyProperties);
-    SkDELETE(fMetaData);
-}
+SkBaseDevice::~SkBaseDevice() { delete fMetaData; }
 
 SkMetaData& SkBaseDevice::getMetaData() {
     // metadata users are rare, so we lazily allocate it. If that changes we
     // can decide to just make it a field in the device (rather than a ptr)
-    if (NULL == fMetaData) {
+    if (nullptr == fMetaData) {
         fMetaData = new SkMetaData;
     }
     return *fMetaData;
@@ -66,7 +58,8 @@ const SkBitmap& SkBaseDevice::accessBitmap(bool changePixels) {
 
 SkPixelGeometry SkBaseDevice::CreateInfo::AdjustGeometry(const SkImageInfo& info,
                                                          TileUsage tileUsage,
-                                                         SkPixelGeometry geo) {
+                                                         SkPixelGeometry geo,
+                                                         bool preserveLCDText) {
     switch (tileUsage) {
         case kPossible_TileUsage:
             // (we think) for compatibility with old clients, we assume this layer can support LCD
@@ -74,26 +67,13 @@ SkPixelGeometry SkBaseDevice::CreateInfo::AdjustGeometry(const SkImageInfo& info
             // our callers (reed/robertphilips).
             break;
         case kNever_TileUsage:
-            if (info.alphaType() != kOpaque_SkAlphaType) {
+            if (!preserveLCDText) {
                 geo = kUnknown_SkPixelGeometry;
             }
             break;
     }
     return geo;
 }
-
-void SkBaseDevice::initForRootLayer(SkPixelGeometry geo) {
-    // For now we don't expect to change the geometry for the root-layer, but we make the call
-    // anyway to document logically what is going on.
-    //
-    fLeakyProperties->setPixelGeometry(CreateInfo::AdjustGeometry(this->imageInfo(),
-                                                                  kPossible_TileUsage,
-                                                                  geo));
-}
-
-SkSurface* SkBaseDevice::newSurface(const SkImageInfo&, const SkSurfaceProps&) { return NULL; }
-
-const void* SkBaseDevice::peekPixels(SkImageInfo*, size_t*) { return NULL; }
 
 void SkBaseDevice::drawDRRect(const SkDraw& draw, const SkRRect& outer,
                               const SkRRect& inner, const SkPaint& paint) {
@@ -102,7 +82,7 @@ void SkBaseDevice::drawDRRect(const SkDraw& draw, const SkRRect& outer,
     path.addRRect(inner);
     path.setFillType(SkPath::kEvenOdd_FillType);
 
-    const SkMatrix* preMatrix = NULL;
+    const SkMatrix* preMatrix = nullptr;
     const bool pathIsMutable = true;
     this->drawPath(draw, path, paint, preMatrix, pathIsMutable);
 }
@@ -110,11 +90,11 @@ void SkBaseDevice::drawDRRect(const SkDraw& draw, const SkRRect& outer,
 void SkBaseDevice::drawPatch(const SkDraw& draw, const SkPoint cubics[12], const SkColor colors[4],
                              const SkPoint texCoords[4], SkXfermode* xmode, const SkPaint& paint) {
     SkPatchUtils::VertexData data;
-    
+
     SkISize lod = SkPatchUtils::GetLevelOfDetail(cubics, draw.fMatrix);
 
     // It automatically adjusts lodX and lodY in case it exceeds the number of indices.
-    // If it fails to generate the vertices, then we do not draw. 
+    // If it fails to generate the vertices, then we do not draw.
     if (SkPatchUtils::getVertexData(&data, cubics, colors, texCoords, lod.width(), lod.height())) {
         this->drawVertices(draw, SkCanvas::kTriangles_VertexMode, data.fVertexCount, data.fPoints,
                            data.fTexCoords, data.fColors, xmode, data.fIndices, data.fIndexCount,
@@ -127,7 +107,7 @@ void SkBaseDevice::drawTextBlob(const SkDraw& draw, const SkTextBlob* blob, SkSc
 
     SkPaint runPaint = paint;
 
-    SkTextBlob::RunIterator it(blob);
+    SkTextBlobRunIterator it(blob);
     for (;!it.done(); it.next()) {
         size_t textLen = it.glyphCount() * sizeof(uint16_t);
         const SkPoint& offset = it.offset();
@@ -176,13 +156,70 @@ void SkBaseDevice::drawImage(const SkDraw& draw, const SkImage* image, SkScalar 
 }
 
 void SkBaseDevice::drawImageRect(const SkDraw& draw, const SkImage* image, const SkRect* src,
-                                 const SkRect& dst, const SkPaint& paint) {
+                                 const SkRect& dst, const SkPaint& paint,
+                                 SkCanvas::SrcRectConstraint constraint) {
     // Default impl : turns everything into raster bitmap
     SkBitmap bm;
     if (as_IB(image)->getROPixels(&bm)) {
-        this->drawBitmapRect(draw, bm, src, dst, paint, SkCanvas::kNone_DrawBitmapRectFlag);
+        this->drawBitmapRect(draw, bm, src, dst, paint, constraint);
     }
 }
+
+void SkBaseDevice::drawImageNine(const SkDraw& draw, const SkImage* image, const SkIRect& center,
+                                 const SkRect& dst, const SkPaint& paint) {
+    SkNinePatchIter iter(image->width(), image->height(), center, dst);
+
+    SkRect srcR, dstR;
+    while (iter.next(&srcR, &dstR)) {
+        this->drawImageRect(draw, image, &srcR, dstR, paint, SkCanvas::kStrict_SrcRectConstraint);
+    }
+}
+
+void SkBaseDevice::drawBitmapNine(const SkDraw& draw, const SkBitmap& bitmap, const SkIRect& center,
+                                  const SkRect& dst, const SkPaint& paint) {
+    SkNinePatchIter iter(bitmap.width(), bitmap.height(), center, dst);
+
+    SkRect srcR, dstR;
+    while (iter.next(&srcR, &dstR)) {
+        this->drawBitmapRect(draw, bitmap, &srcR, dstR, paint, SkCanvas::kStrict_SrcRectConstraint);
+    }
+}
+
+void SkBaseDevice::drawAtlas(const SkDraw& draw, const SkImage* atlas, const SkRSXform xform[],
+                             const SkRect tex[], const SkColor colors[], int count,
+                             SkXfermode::Mode mode, const SkPaint& paint) {
+    SkPath path;
+    path.setIsVolatile(true);
+
+    for (int i = 0; i < count; ++i) {
+        SkPoint quad[4];
+        xform[i].toQuad(tex[i].width(), tex[i].height(), quad);
+
+        SkMatrix localM;
+        localM.setRSXform(xform[i]);
+        localM.preTranslate(-tex[i].left(), -tex[i].top());
+
+        SkPaint pnt(paint);
+        sk_sp<SkShader> shader = atlas->makeShader(SkShader::kClamp_TileMode,
+                                                   SkShader::kClamp_TileMode,
+                                                   &localM);
+        if (!shader) {
+            break;
+        }
+        pnt.setShader(std::move(shader));
+
+        if (colors) {
+            pnt.setColorFilter(SkColorFilter::MakeModeFilter(colors[i], mode));
+        }
+
+        path.rewind();
+        path.addPoly(quad, 4, true);
+        path.setConvexity(SkPath::kConvex_Convexity);
+        this->drawPath(draw, path, pnt, nullptr, true);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 bool SkBaseDevice::readPixels(const SkImageInfo& info, void* dstP, size_t rowBytes, int x, int y) {
 #ifdef SK_DEBUG
@@ -221,26 +258,26 @@ bool SkBaseDevice::onReadPixels(const SkImageInfo&, void*, size_t, int x, int y)
     return false;
 }
 
-void* SkBaseDevice::accessPixels(SkImageInfo* info, size_t* rowBytes) {
-    SkImageInfo tmpInfo;
-    size_t tmpRowBytes;
-    if (NULL == info) {
-        info = &tmpInfo;
-    }
-    if (NULL == rowBytes) {
-        rowBytes = &tmpRowBytes;
-    }
-    return this->onAccessPixels(info, rowBytes);
-}
-
-void* SkBaseDevice::onAccessPixels(SkImageInfo* info, size_t* rowBytes) {
-    return NULL;
-}
-
 bool SkBaseDevice::EXPERIMENTAL_drawPicture(SkCanvas*, const SkPicture*, const SkMatrix*,
                                             const SkPaint*) {
     // The base class doesn't perform any accelerated picture rendering
     return false;
+}
+
+bool SkBaseDevice::accessPixels(SkPixmap* pmap) {
+    SkPixmap tempStorage;
+    if (nullptr == pmap) {
+        pmap = &tempStorage;
+    }
+    return this->onAccessPixels(pmap);
+}
+
+bool SkBaseDevice::peekPixels(SkPixmap* pmap) {
+    SkPixmap tempStorage;
+    if (nullptr == pmap) {
+        pmap = &tempStorage;
+    }
+    return this->onPeekPixels(pmap);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -248,24 +285,24 @@ bool SkBaseDevice::EXPERIMENTAL_drawPicture(SkCanvas*, const SkPicture*, const S
 static void morphpoints(SkPoint dst[], const SkPoint src[], int count,
                         SkPathMeasure& meas, const SkMatrix& matrix) {
     SkMatrix::MapXYProc proc = matrix.getMapXYProc();
-    
+
     for (int i = 0; i < count; i++) {
         SkPoint pos;
         SkVector tangent;
-        
+
         proc(matrix, src[i].fX, src[i].fY, &pos);
         SkScalar sx = pos.fX;
         SkScalar sy = pos.fY;
-        
+
         if (!meas.getPosTan(sx, &pos, &tangent)) {
             // set to 0 if the measure failed, so that we just set dst == pos
             tangent.set(0, 0);
         }
-        
+
         /*  This is the old way (that explains our approach but is way too slow
          SkMatrix    matrix;
          SkPoint     pt;
-         
+
          pt.set(sx, sy);
          matrix.setSinCos(tangent.fY, tangent.fX);
          matrix.preTranslate(-sx, 0);
@@ -278,7 +315,7 @@ static void morphpoints(SkPoint dst[], const SkPoint src[], int count,
 }
 
 /*  TODO
- 
+
  Need differentially more subdivisions when the follow-path is curvy. Not sure how to
  determine that, but we need it. I guess a cheap answer is let the caller tell us,
  but that seems like a cop-out. Another answer is to get Rob Johnson to figure it out.
@@ -288,7 +325,7 @@ static void morphpath(SkPath* dst, const SkPath& src, SkPathMeasure& meas,
     SkPath::Iter    iter(src, false);
     SkPoint         srcP[4], dstP[3];
     SkPath::Verb    verb;
-    
+
     while ((verb = iter.next(srcP)) != SkPath::kDone_Verb) {
         switch (verb) {
             case SkPath::kMove_Verb:
@@ -323,17 +360,17 @@ static void morphpath(SkPath* dst, const SkPath& src, SkPathMeasure& meas,
 void SkBaseDevice::drawTextOnPath(const SkDraw& draw, const void* text, size_t byteLength,
                                   const SkPath& follow, const SkMatrix* matrix,
                                   const SkPaint& paint) {
-    SkASSERT(byteLength == 0 || text != NULL);
-    
+    SkASSERT(byteLength == 0 || text != nullptr);
+
     // nothing to draw
-    if (text == NULL || byteLength == 0 || draw.fRC->isEmpty()) {
+    if (text == nullptr || byteLength == 0 || draw.fRC->isEmpty()) {
         return;
     }
-    
+
     SkTextToPathIter    iter((const char*)text, byteLength, paint, true);
     SkPathMeasure       meas(follow, false);
     SkScalar            hOffset = 0;
-    
+
     // need to measure first
     if (paint.getTextAlign() != SkPaint::kLeft_Align) {
         SkScalar pathLen = meas.getLength();
@@ -342,31 +379,61 @@ void SkBaseDevice::drawTextOnPath(const SkDraw& draw, const void* text, size_t b
         }
         hOffset += pathLen;
     }
-    
+
     const SkPath*   iterPath;
     SkScalar        xpos;
     SkMatrix        scaledMatrix;
     SkScalar        scale = iter.getPathScale();
-    
+
     scaledMatrix.setScale(scale, scale);
-    
+
     while (iter.next(&iterPath, &xpos)) {
         if (iterPath) {
             SkPath      tmp;
             SkMatrix    m(scaledMatrix);
-            
+
             tmp.setIsVolatile(true);
             m.postTranslate(xpos + hOffset, 0);
             if (matrix) {
                 m.postConcat(*matrix);
             }
             morphpath(&tmp, *iterPath, meas, m);
-            this->drawPath(draw, tmp, iter.getPaint(), NULL, true);
+            this->drawPath(draw, tmp, iter.getPaint(), nullptr, true);
         }
     }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
+
+void SkBaseDevice::drawSpriteWithFilter(const SkDraw& draw, const SkBitmap& bitmap,
+                                        int x, int y,
+                                        const SkPaint& paint) {
+    SkImageFilter* filter = paint.getImageFilter();
+    SkASSERT(filter);
+
+    SkIPoint offset = SkIPoint::Make(0, 0);
+    SkMatrix matrix = *draw.fMatrix;
+    matrix.postTranslate(SkIntToScalar(-x), SkIntToScalar(-y));
+    const SkIRect clipBounds = draw.fRC->getBounds().makeOffset(-x, -y);
+    SkAutoTUnref<SkImageFilterCache> cache(this->getImageFilterCache());
+    SkImageFilter::Context ctx(matrix, clipBounds, cache.get());
+
+    sk_sp<SkSpecialImage> srcImg(SkSpecialImage::internal_fromBM(bitmap, &this->surfaceProps()));
+    if (!srcImg) {
+        return; // something disastrous happened
+    }
+
+    sk_sp<SkSpecialImage> resultImg(filter->filterImage(srcImg.get(), ctx, &offset));
+    if (resultImg) {
+        SkPaint tmpUnfiltered(paint);
+        tmpUnfiltered.setImageFilter(nullptr);
+        SkBitmap resultBM;
+        if (resultImg->internal_getBM(&resultBM)) {
+            // TODO: add drawSprite(SkSpecialImage) to SkDevice? (see skbug.com/5073)
+            this->drawSprite(draw, resultBM, x + offset.x(), y + offset.y(), tmpUnfiltered);
+        }
+    }
+}
 
 uint32_t SkBaseDevice::filterTextFlags(const SkPaint& paint) const {
     uint32_t flags = paint.getFlags();
@@ -375,7 +442,7 @@ uint32_t SkBaseDevice::filterTextFlags(const SkPaint& paint) const {
         return flags;
     }
 
-    if (kUnknown_SkPixelGeometry == fLeakyProperties->pixelGeometry()
+    if (kUnknown_SkPixelGeometry == fSurfaceProps.pixelGeometry()
         || this->onShouldDisableLCD(paint)) {
 
         flags &= ~SkPaint::kLCDRenderText_Flag;
@@ -383,5 +450,63 @@ uint32_t SkBaseDevice::filterTextFlags(const SkPaint& paint) const {
     }
 
     return flags;
+}
+
+sk_sp<SkSurface> SkBaseDevice::makeSurface(SkImageInfo const&, SkSurfaceProps const&) {
+    return nullptr;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+void SkBaseDevice::LogDrawScaleFactor(const SkMatrix& matrix, SkFilterQuality filterQuality) {
+#if SK_HISTOGRAMS_ENABLED
+    enum ScaleFactor {
+        kUpscale_ScaleFactor,
+        kNoScale_ScaleFactor,
+        kDownscale_ScaleFactor,
+        kLargeDownscale_ScaleFactor,
+
+        kLast_ScaleFactor = kLargeDownscale_ScaleFactor
+    };
+
+    float rawScaleFactor = matrix.getMinScale();
+
+    ScaleFactor scaleFactor;
+    if (rawScaleFactor < 0.5f) {
+        scaleFactor = kLargeDownscale_ScaleFactor;
+    } else if (rawScaleFactor < 1.0f) {
+        scaleFactor = kDownscale_ScaleFactor;
+    } else if (rawScaleFactor > 1.0f) {
+        scaleFactor = kUpscale_ScaleFactor;
+    } else {
+        scaleFactor = kNoScale_ScaleFactor;
+    }
+
+    switch (filterQuality) {
+        case kNone_SkFilterQuality:
+            SK_HISTOGRAM_ENUMERATION("DrawScaleFactor.NoneFilterQuality", scaleFactor,
+                                     kLast_ScaleFactor + 1);
+            break;
+        case kLow_SkFilterQuality:
+            SK_HISTOGRAM_ENUMERATION("DrawScaleFactor.LowFilterQuality", scaleFactor,
+                                     kLast_ScaleFactor + 1);
+            break;
+        case kMedium_SkFilterQuality:
+            SK_HISTOGRAM_ENUMERATION("DrawScaleFactor.MediumFilterQuality", scaleFactor,
+                                     kLast_ScaleFactor + 1);
+            break;
+        case kHigh_SkFilterQuality:
+            SK_HISTOGRAM_ENUMERATION("DrawScaleFactor.HighFilterQuality", scaleFactor,
+                                     kLast_ScaleFactor + 1);
+            break;
+    }
+
+    // Also log filter quality independent scale factor.
+    SK_HISTOGRAM_ENUMERATION("DrawScaleFactor.AnyFilterQuality", scaleFactor,
+                             kLast_ScaleFactor + 1);
+
+    // Also log an overall histogram of filter quality.
+    SK_HISTOGRAM_ENUMERATION("FilterQuality", filterQuality, kLast_SkFilterQuality + 1);
+#endif
 }
 

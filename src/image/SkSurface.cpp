@@ -5,6 +5,7 @@
  * found in the LICENSE file.
  */
 
+#include "SkAtomics.h"
 #include "SkSurface_Base.h"
 #include "SkImagePriv.h"
 #include "SkCanvas.h"
@@ -57,21 +58,21 @@ SkSurfaceProps::SkSurfaceProps(const SkSurfaceProps& other)
 SkSurface_Base::SkSurface_Base(int width, int height, const SkSurfaceProps* props)
     : INHERITED(width, height, props)
 {
-    fCachedCanvas = NULL;
-    fCachedImage = NULL;
+    fCachedCanvas = nullptr;
+    fCachedImage = nullptr;
 }
 
 SkSurface_Base::SkSurface_Base(const SkImageInfo& info, const SkSurfaceProps* props)
     : INHERITED(info, props)
 {
-    fCachedCanvas = NULL;
-    fCachedImage = NULL;
+    fCachedCanvas = nullptr;
+    fCachedImage = nullptr;
 }
 
 SkSurface_Base::~SkSurface_Base() {
     // in case the canvas outsurvives us, we null the callback
     if (fCachedCanvas) {
-        fCachedCanvas->setSurfaceBase(NULL);
+        fCachedCanvas->setSurfaceBase(nullptr);
     }
 
     SkSafeUnref(fCachedImage);
@@ -79,11 +80,14 @@ SkSurface_Base::~SkSurface_Base() {
 }
 
 void SkSurface_Base::onDraw(SkCanvas* canvas, SkScalar x, SkScalar y, const SkPaint* paint) {
-    SkImage* image = this->newImageSnapshot(kYes_Budgeted);
+    auto image = this->makeImageSnapshot(SkBudgeted::kYes);
     if (image) {
         canvas->drawImage(image, x, y, paint);
-        image->unref();
     }
+}
+
+bool SkSurface_Base::outstandingImageSnapshot() const {
+    return fCachedImage && !fCachedImage->unique();
 }
 
 void SkSurface_Base::aboutToDraw(ContentChangeMode mode) {
@@ -95,14 +99,22 @@ void SkSurface_Base::aboutToDraw(ContentChangeMode mode) {
         // the surface may need to fork its backend, if its sharing it with
         // the cached image. Note: we only call if there is an outstanding owner
         // on the image (besides us).
-        if (!fCachedImage->unique()) {
+        bool unique = fCachedImage->unique();
+        if (!unique) {
             this->onCopyOnWrite(mode);
         }
 
         // regardless of copy-on-write, we must drop our cached image now, so
         // that the next request will get our new contents.
         fCachedImage->unref();
-        fCachedImage = NULL;
+        fCachedImage = nullptr;
+
+        if (unique) {
+            // Our content isn't held by any image now, so we can consider that content mutable.
+            // Raster surfaces need to be told it's safe to consider its pixels mutable again.
+            // We make this call after the ->unref() so the subclass can assert there are no images.
+            this->onRestoreBackingMutability();
+        }
     } else if (kDiscard_ContentChangeMode == mode) {
         this->onDiscard();
     }
@@ -151,13 +163,17 @@ SkCanvas* SkSurface::getCanvas() {
     return asSB(this)->getCachedCanvas();
 }
 
-SkImage* SkSurface::newImageSnapshot(Budgeted budgeted) {
-    SkImage* image = asSB(this)->getCachedImage(budgeted);
-    SkSafeRef(image);   // the caller will call unref() to balance this
-    return image;
+sk_sp<SkImage> SkSurface::makeImageSnapshot(SkBudgeted budgeted) {
+    // the caller will call unref() to balance this
+    return asSB(this)->refCachedImage(budgeted, kNo_ForceUnique);
 }
 
-SkSurface* SkSurface::newSurface(const SkImageInfo& info) {
+sk_sp<SkImage> SkSurface::makeImageSnapshot(SkBudgeted budgeted, ForceUnique unique) {
+    // the caller will call unref() to balance this
+    return asSB(this)->refCachedImage(budgeted, unique);
+}
+
+sk_sp<SkSurface> SkSurface::makeSurface(const SkImageInfo& info) {
     return asSB(this)->onNewSurface(info);
 }
 
@@ -166,31 +182,70 @@ void SkSurface::draw(SkCanvas* canvas, SkScalar x, SkScalar y,
     return asSB(this)->onDraw(canvas, x, y, paint);
 }
 
-const void* SkSurface::peekPixels(SkImageInfo* info, size_t* rowBytes) {
-    return this->getCanvas()->peekPixels(info, rowBytes);
+bool SkSurface::peekPixels(SkPixmap* pmap) {
+    return this->getCanvas()->peekPixels(pmap);
 }
+
+#ifdef SK_SUPPORT_LEGACY_PEEKPIXELS_PARMS
+const void* SkSurface::peekPixels(SkImageInfo* info, size_t* rowBytes) {
+    SkPixmap pm;
+    if (this->peekPixels(&pm)) {
+        if (info) {
+            *info = pm.info();
+        }
+        if (rowBytes) {
+            *rowBytes = pm.rowBytes();
+        }
+        return pm.addr();
+    }
+    return nullptr;
+}
+#endif
 
 bool SkSurface::readPixels(const SkImageInfo& dstInfo, void* dstPixels, size_t dstRowBytes,
                            int srcX, int srcY) {
     return this->getCanvas()->readPixels(dstInfo, dstPixels, dstRowBytes, srcX, srcY);
 }
 
+GrBackendObject SkSurface::getTextureHandle(BackendHandleAccess access) {
+    return asSB(this)->onGetTextureHandle(access);
+}
+
+bool SkSurface::getRenderTargetHandle(GrBackendObject* obj, BackendHandleAccess access) {
+    return asSB(this)->onGetRenderTargetHandle(obj, access);
+}
+
+void SkSurface::prepareForExternalIO() {
+  asSB(this)->onPrepareForExternalIO();
+}
+
 //////////////////////////////////////////////////////////////////////////////////////
 
 #if !SK_SUPPORT_GPU
 
-SkSurface* SkSurface::NewRenderTargetDirect(GrRenderTarget*, const SkSurfaceProps*) {
-    return NULL;
+sk_sp<SkSurface> SkSurface::MakeRenderTargetDirect(GrRenderTarget*, const SkSurfaceProps*) {
+    return nullptr;
 }
 
-SkSurface* SkSurface::NewRenderTarget(GrContext*, Budgeted, const SkImageInfo&, int,
-                                      const SkSurfaceProps*) {
-    return NULL;
-}
-
-SkSurface* SkSurface::NewWrappedRenderTarget(GrContext*, GrBackendTextureDesc,
+sk_sp<SkSurface> SkSurface::MakeRenderTarget(GrContext*, SkBudgeted, const SkImageInfo&, int,
                                              const SkSurfaceProps*) {
-    return NULL;
+    return nullptr;
+}
+
+sk_sp<SkSurface> SkSurface::MakeFromBackendTexture(GrContext*, const GrBackendTextureDesc&,
+                                                   const SkSurfaceProps*) {
+    return nullptr;
+}
+
+sk_sp<SkSurface> SkSurface::MakeFromBackendRenderTarget(GrContext*,
+                                                        const GrBackendRenderTargetDesc&,
+                                                        const SkSurfaceProps*) {
+    return nullptr;
+}
+
+sk_sp<SkSurface> MakeFromBackendTextureAsRenderTarget(GrContext*, const GrBackendTextureDesc&,
+                                                      const SkSurfaceProps*) {
+    return nullptr;
 }
 
 #endif

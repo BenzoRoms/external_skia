@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -31,7 +30,7 @@ protected:
         return fName.c_str();
     }
 
-    void onDraw(const int loops, SkCanvas* canvas) override {
+    void onDraw(int loops, SkCanvas* canvas) override {
         for (int i = 0; i < loops; i++) {
             this->performTest();
         }
@@ -149,7 +148,7 @@ protected:
         return "rect_bounds";
     }
 
-    void onDraw(const int loops, SkCanvas* canvas) override {
+    void onDraw(int loops, SkCanvas* canvas) override {
         SkRect r;
         for (int i = 0; i < loops; ++i) {
             for (int i = 0; i < 1000; ++i) {

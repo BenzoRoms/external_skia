@@ -54,15 +54,15 @@ public:
         fR = SkRect::MakeXYWH(rand.nextRangeF(0, 640), rand.nextRangeF(0, 480),
                               rand.nextRangeF(20, 200), rand.nextRangeF(20, 200));
         fColor = rand_opaque_color(rand.nextU());
-        fInterp = NULL;
+        fInterp = nullptr;
         fTime = 0;
     }
-    
+
     void spawnAnimation(SkMSec now) {
         this->setTime(now);
 
-        SkDELETE(fInterp);
-        fInterp = SkNEW_ARGS(SkInterpolator, (5, 3));
+        delete fInterp;
+        fInterp = new SkInterpolator(5, 3);
         SkScalar values[5];
         color_to_floats(fColor, values); values[4] = 0;
         fInterp->setKeyFrame(0, now, values);
@@ -101,8 +101,8 @@ public:
 
             switch (res) {
                 case SkInterpolator::kFreezeEnd_Result:
-                    SkDELETE(fInterp);
-                    fInterp = NULL;
+                    delete fInterp;
+                    fInterp = nullptr;
                     break;
                 default:
                     break;
@@ -122,14 +122,14 @@ public:
         W = 640,
         H = 480,
     };
-    
+
     struct Rec {
         HTDrawable* fDrawable;
     };
     Rec fArray[N];
-    SkAutoTUnref<SkDrawable> fRoot;
+    sk_sp<SkDrawable> fRoot;
     SkMSec fTime;
-    
+
     HTView() {
         SkRandom rand;
 
@@ -140,7 +140,7 @@ public:
             canvas->drawDrawable(fArray[i].fDrawable);
             fArray[i].fDrawable->unref();
         }
-        fRoot.reset(recorder.endRecordingAsDrawable());
+        fRoot = recorder.finishRecordingAsDrawable();
     }
 
 protected:
@@ -153,7 +153,7 @@ protected:
     }
 
     void onDrawContent(SkCanvas* canvas) override {
-        canvas->drawDrawable(fRoot);
+        canvas->drawDrawable(fRoot.get());
     }
 
     bool onAnimate(const SkAnimTimer& timer) override {
@@ -172,8 +172,8 @@ protected:
                 break;
             }
         }
-        this->inval(NULL);
-        return NULL;
+        this->inval(nullptr);
+        return nullptr;
     }
 
 private:

@@ -7,7 +7,6 @@
 
 #include "GrProcessor.h"
 #include "GrContext.h"
-#include "GrCoordTransform.h"
 #include "GrGeometryProcessor.h"
 #include "GrInvariantOutput.h"
 #include "GrMemoryPool.h"
@@ -49,9 +48,9 @@ GrProcessorTestFactory<GrGeometryProcessor>::GetFactories() {
  * we verify the count is as expected.  If a new factory is added, then these numbers must be
  * manually adjusted.
  */
-static const int kFPFactoryCount = 37;
+static const int kFPFactoryCount = 40;
 static const int kGPFactoryCount = 14;
-static const int kXPFactoryCount = 5;
+static const int kXPFactoryCount = 6;
 
 template<>
 void GrProcessorTestFactory<GrFragmentProcessor>::VerifyFactoryCount() {
@@ -82,7 +81,7 @@ void GrProcessorTestFactory<GrXPFactory>::VerifyFactoryCount() {
 // memory barrier between accesses of a context on different threads. Also, there may be multiple
 // GrContexts and those contexts may be in use concurrently on different threads.
 namespace {
-SK_DECLARE_STATIC_SPINLOCK(gProcessorSpinlock);
+static SkSpinlock gProcessorSpinlock;
 class MemoryPoolAccessor {
 public:
     MemoryPoolAccessor() { gProcessorSpinlock.acquire(); }
@@ -107,6 +106,11 @@ void GrProcessor::addTextureAccess(const GrTextureAccess* access) {
     this->addGpuResource(access->getProgramTexture());
 }
 
+void GrProcessor::addBufferAccess(const GrBufferAccess* access) {
+    fBufferAccesses.push_back(access);
+    this->addGpuResource(access->getProgramBuffer());
+}
+
 void* GrProcessor::operator new(size_t size) {
     return MemoryPoolAccessor().pool()->allocate(size);
 }
@@ -115,8 +119,8 @@ void GrProcessor::operator delete(void* target) {
     return MemoryPoolAccessor().pool()->release(target);
 }
 
-bool GrProcessor::hasSameTextureAccesses(const GrProcessor& that) const {
-    if (this->numTextures() != that.numTextures()) {
+bool GrProcessor::hasSameSamplers(const GrProcessor& that) const {
+    if (this->numTextures() != that.numTextures() || this->numBuffers() != that.numBuffers()) {
         return false;
     }
     for (int i = 0; i < this->numTextures(); ++i) {
@@ -124,32 +128,12 @@ bool GrProcessor::hasSameTextureAccesses(const GrProcessor& that) const {
             return false;
         }
     }
-    return true;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-void GrFragmentProcessor::addCoordTransform(const GrCoordTransform* transform) {
-    fCoordTransforms.push_back(transform);
-    fUsesLocalCoords = fUsesLocalCoords || transform->sourceCoords() == kLocal_GrCoordSet;
-    SkDEBUGCODE(transform->setInProcessor();)
-}
-
-bool GrFragmentProcessor::hasSameTransforms(const GrFragmentProcessor& that) const {
-    if (fCoordTransforms.count() != that.fCoordTransforms.count()) {
-        return false;
-    }
-    int count = fCoordTransforms.count();
-    for (int i = 0; i < count; ++i) {
-        if (*fCoordTransforms[i] != *that.fCoordTransforms[i]) {
+    for (int i = 0; i < this->numBuffers(); ++i) {
+        if (this->bufferAccess(i) != that.bufferAccess(i)) {
             return false;
         }
     }
     return true;
-}
-
-void GrFragmentProcessor::computeInvariantOutput(GrInvariantOutput* inout) const {
-    this->onComputeInvariantOutput(inout);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

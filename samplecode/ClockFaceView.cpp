@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -17,6 +16,7 @@
 #include "SkUtils.h"
 #include "SkColorPriv.h"
 #include "SkColorFilter.h"
+#include "SkStrokeRec.h"
 #include "SkTypeface.h"
 
 static inline SkPMColor rgb2gray(SkPMColor c) {
@@ -101,10 +101,10 @@ private:
     typedef Sk2DPathEffect INHERITED;
 };
 
-SkFlattenable* Dot2DPathEffect::CreateProc(SkReadBuffer& buffer) {
+sk_sp<SkFlattenable> Dot2DPathEffect::CreateProc(SkReadBuffer& buffer) {
     SkMatrix matrix;
     buffer.readMatrix(&matrix);
-    return SkNEW_ARGS(Dot2DPathEffect, (buffer.readScalar(), matrix, NULL));
+    return sk_make_sp<Dot2DPathEffect>(buffer.readScalar(), matrix, nullptr);
 }
 
 class InverseFillPE : public SkPathEffect {
@@ -129,20 +129,20 @@ private:
     typedef SkPathEffect INHERITED;
 };
 
-SkFlattenable* InverseFillPE::CreateProc(SkReadBuffer& buffer) {
-    return SkNEW(InverseFillPE);
+sk_sp<SkFlattenable> InverseFillPE::CreateProc(SkReadBuffer& buffer) {
+    return sk_make_sp<InverseFillPE>();
 }
 
-static SkPathEffect* makepe(float interp, SkTDArray<SkPoint>* pts) {
+static sk_sp<SkPathEffect> makepe(float interp, SkTDArray<SkPoint>* pts) {
     SkMatrix    lattice;
     SkScalar    rad = 3 + SkIntToScalar(4) * (1 - interp);
     lattice.setScale(rad*2, rad*2, 0, 0);
     lattice.postSkew(SK_Scalar1/3, 0, 0, 0);
-    return new Dot2DPathEffect(rad, lattice, pts);
+    return sk_make_sp<Dot2DPathEffect>(rad, lattice, pts);
 }
 
 static void r7(SkLayerRasterizer::Builder* rastBuilder, SkPaint& p, SkScalar interp) {
-    p.setPathEffect(makepe(SkScalarToFloat(interp), NULL))->unref();
+    p.setPathEffect(makepe(SkScalarToFloat(interp), nullptr));
     rastBuilder->addLayer(p);
 #if 0
     p.setPathEffect(new InverseFillPE())->unref();
@@ -164,25 +164,21 @@ static void apply_shader(SkPaint* paint, float scale)
 
     p.setAntiAlias(true);
     r7(&rastBuilder, p, scale);
-    paint->setRasterizer(rastBuilder.detachRasterizer())->unref();
+    paint->setRasterizer(rastBuilder.detach());
 
     paint->setColor(SK_ColorBLUE);
 }
 
 class ClockFaceView : public SkView {
-    SkTypeface* fFace;
+    sk_sp<SkTypeface> fFace;
     SkScalar fInterp;
     SkScalar fDx;
 
 public:
     ClockFaceView() {
-        fFace = SkTypeface::CreateFromFile("/Users/reed/Downloads/p052024l.pfb");
+        fFace = SkTypeface::MakeFromFile("/Users/reed/Downloads/p052024l.pfb");
         fInterp = 0;
         fDx = SK_Scalar1/64;
-    }
-
-    virtual ~ClockFaceView() {
-        SkSafeUnref(fFace);
     }
 
 protected:
@@ -202,19 +198,18 @@ protected:
 
     static void drawdots(SkCanvas* canvas, const SkPaint& orig) {
         SkTDArray<SkPoint> pts;
-        SkPathEffect* pe = makepe(0, &pts);
+        auto pe = makepe(0, &pts);
 
         SkStrokeRec rec(SkStrokeRec::kFill_InitStyle);
         SkPath path, dstPath;
         orig.getTextPath("9", 1, 0, 0, &path);
-        pe->filterPath(&dstPath, path, &rec, NULL);
+        pe->filterPath(&dstPath, path, &rec, nullptr);
 
         SkPaint p;
         p.setAntiAlias(true);
         p.setStrokeWidth(10);
         p.setColor(SK_ColorRED);
-        canvas->drawPoints(SkCanvas::kPoints_PointMode, pts.count(), pts.begin(),
-                           p);
+        canvas->drawPoints(SkCanvas::kPoints_PointMode, pts.count(), pts.begin(), p);
     }
 
     virtual void onDraw(SkCanvas* canvas) {
@@ -226,8 +221,7 @@ protected:
 
         paint.setAntiAlias(true);
         paint.setTextSize(SkIntToScalar(240));
-        paint.setTypeface(SkTypeface::CreateFromName("sans-serif",
-                                                     SkTypeface::kBold));
+        paint.setTypeface(SkTypeface::MakeFromName("sans-serif", SkTypeface::kBold));
 
         SkString str("9");
 
@@ -247,7 +241,7 @@ protected:
                 fInterp = 0;
                 fDx = -fDx;
             }
-            this->inval(NULL);
+            this->inval(nullptr);
         }
     }
 

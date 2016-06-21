@@ -8,6 +8,7 @@
 #ifndef SkTestScalerContext_DEFINED
 #define SkTestScalerContext_DEFINED
 
+#include "SkFixed.h"
 #include "SkPaint.h"
 #include "SkPath.h"
 #include "SkRefCnt.h"
@@ -30,7 +31,7 @@ struct SkTestFontData {
 
 class SkTestFont : public SkRefCnt {
 public:
-    SK_DECLARE_INST_COUNT(SkTestFont)
+    
 
     SkTestFont(const SkTestFontData& );
     virtual ~SkTestFont();
@@ -66,7 +67,8 @@ public:
     void getMetrics(SkGlyph* glyph);
     void getPath(const SkGlyph& glyph, SkPath* path);
 protected:
-    SkScalerContext* onCreateScalerContext(const SkDescriptor* desc) const override;
+    SkScalerContext* onCreateScalerContext(const SkScalerContextEffects&,
+                                           const SkDescriptor* desc) const override;
     void onFilterRec(SkScalerContextRec* rec) const override;
     SkAdvancedTypefaceMetrics* onGetAdvancedTypefaceMetrics(
         PerGlyphInfo,
@@ -74,8 +76,7 @@ protected:
         uint32_t glyphIDsCount) const override;
 
     SkStreamAsset* onOpenStream(int* ttcIndex) const override {
-        SkASSERT(0);  // don't expect to get here
-        return NULL;
+        return nullptr;
     }
 
     void onGetFontDescriptor(SkFontDescriptor* desc, bool* isLocal) const override;

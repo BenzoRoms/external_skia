@@ -10,10 +10,11 @@
 #include "SkDashPathPriv.h"
 #include "SkReadBuffer.h"
 #include "SkWriteBuffer.h"
+#include "SkStrokeRec.h"
 
 SkDashPathEffect::SkDashPathEffect(const SkScalar intervals[], int count, SkScalar phase)
         : fPhase(0)
-        , fInitialDashLength(0)
+        , fInitialDashLength(-1)
         , fInitialDashIndex(0)
         , fIntervalLength(0) {
     SkASSERT(intervals);
@@ -22,7 +23,6 @@ SkDashPathEffect::SkDashPathEffect(const SkScalar intervals[], int count, SkScal
     fIntervals = (SkScalar*)sk_malloc_throw(sizeof(SkScalar) * count);
     fCount = count;
     for (int i = 0; i < count; i++) {
-        SkASSERT(intervals[i] >= 0);
         fIntervals[i] = intervals[i];
     }
 
@@ -37,7 +37,7 @@ SkDashPathEffect::~SkDashPathEffect() {
 
 bool SkDashPathEffect::filterPath(SkPath* dst, const SkPath& src,
                               SkStrokeRec* rec, const SkRect* cullRect) const {
-    return SkDashPath::FilterDashPath(dst, src, rec, cullRect, fIntervals, fCount,
+    return SkDashPath::InternalFilter(dst, src, rec, cullRect, fIntervals, fCount,
                                       fInitialDashLength, fInitialDashIndex, fIntervalLength);
 }
 
@@ -58,7 +58,7 @@ static void outset_for_stroke(SkRect* rect, const SkStrokeRec& rec) {
 static bool cull_line(SkPoint* pts, const SkStrokeRec& rec,
                       const SkMatrix& ctm, const SkRect* cullRect,
                       const SkScalar intervalLength) {
-    if (NULL == cullRect) {
+    if (nullptr == cullRect) {
         SkASSERT(false); // Shouldn't ever occur in practice
         return false;
     }
@@ -161,7 +161,7 @@ bool SkDashPathEffect::asPoints(PointData* results,
                                 const SkMatrix& matrix,
                                 const SkRect* cullRect) const {
     // width < 0 -> fill && width == 0 -> hairline so requiring width > 0 rules both out
-    if (fInitialDashLength < 0 || 0 >= rec.getWidth()) {
+    if (0 >= rec.getWidth()) {
         return false;
     }
 
@@ -360,14 +360,14 @@ void SkDashPathEffect::flatten(SkWriteBuffer& buffer) const {
     buffer.writeScalarArray(fIntervals, fCount);
 }
 
-SkFlattenable* SkDashPathEffect::CreateProc(SkReadBuffer& buffer) {
+sk_sp<SkFlattenable> SkDashPathEffect::CreateProc(SkReadBuffer& buffer) {
     const SkScalar phase = buffer.readScalar();
     uint32_t count = buffer.getArrayCount();
     SkAutoSTArray<32, SkScalar> intervals(count);
     if (buffer.readScalarArray(intervals.get(), count)) {
-        return Create(intervals.get(), SkToInt(count), phase);
+        return Make(intervals.get(), SkToInt(count), phase);
     }
-    return NULL;
+    return nullptr;
 }
 
 #ifndef SK_IGNORE_TO_STRING
@@ -383,3 +383,12 @@ void SkDashPathEffect::toString(SkString* str) const {
     str->appendf("))");
 }
 #endif
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+sk_sp<SkPathEffect> SkDashPathEffect::Make(const SkScalar intervals[], int count, SkScalar phase) {
+    if (!SkDashPath::ValidDashPath(phase, intervals, count)) {
+        return nullptr;
+    }
+    return sk_sp<SkPathEffect>(new SkDashPathEffect(intervals, count, phase));
+}

@@ -38,8 +38,8 @@ void SkGLWidget::initializeGL() {
     if (fCurContext) {
         fCurContext->abandonContext();
     }
-    fGpuDevice.reset(NULL);
-    fCanvas.reset(NULL);
+    fGpuDevice.reset(nullptr);
+    fCanvas.reset(nullptr);
 
     fCurContext.reset(GrContext::Create(kOpenGL_GrBackend, (GrBackendContext) fCurIntf.get()));
 }
@@ -55,15 +55,16 @@ void SkGLWidget::createRenderTarget() {
     glClear(GL_STENCIL_BUFFER_BIT);
     fCurContext->resetContext();
 
-    fGpuDevice.reset(NULL);
-    fCanvas.reset(NULL);
+    fGpuDevice.reset(nullptr);
+    fCanvas.reset(nullptr);
 
     GrBackendRenderTargetDesc desc = this->getDesc(this->width(), this->height());
     desc.fOrigin = kBottomLeft_GrSurfaceOrigin;
-    SkAutoTUnref<GrRenderTarget> curRenderTarget(
+    sk_sp<GrRenderTarget> curRenderTarget(
             fCurContext->textureProvider()->wrapBackendRenderTarget(desc));
-    SkSurfaceProps props(SkSurfaceProps::kLegacyFontHost_InitType);
-    fGpuDevice.reset(SkGpuDevice::Create(curRenderTarget, &props));
+    SkSurfaceProps props(0, kUnknown_SkPixelGeometry);
+    fGpuDevice.reset(SkGpuDevice::Make(std::move(curRenderTarget), &props,
+                                       SkGpuDevice::kUninit_InitContents).release());
     fCanvas.reset(new SkCanvas(fGpuDevice));
 }
 
@@ -78,7 +79,7 @@ void SkGLWidget::paintGL() {
         fDebugger->draw(fCanvas.get());
         // TODO(chudy): Implement an optional flush button in Gui.
         fCanvas->flush();
-        emit drawComplete();
+        Q_EMIT drawComplete();
     }
 }
 

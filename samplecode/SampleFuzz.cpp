@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -190,8 +189,7 @@ static void do_fuzz(SkCanvas* canvas) {
 
     case 7:
       if (quick == true) break;
-          SkSafeUnref(paint.setMaskFilter(SkBlurMaskFilter::Create(kNormal_SkBlurStyle,
-                                                                   make_number())));
+      paint.setMaskFilter(SkBlurMaskFilter::Make(kNormal_SkBlurStyle, make_number()));
       break;
 
     case 8:
@@ -383,7 +381,7 @@ protected:
 
     virtual void onDrawContent(SkCanvas* canvas) {
         do_fuzz(canvas);
-        this->inval(NULL);
+        this->inval(nullptr);
     }
 
 private:

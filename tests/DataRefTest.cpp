@@ -33,10 +33,10 @@ static void test_datatable_is_empty(skiatest::Reporter* reporter,
 
 static void test_emptytable(skiatest::Reporter* reporter) {
     SkAutoTUnref<SkDataTable> table0(SkDataTable::NewEmpty());
-    SkAutoTUnref<SkDataTable> table1(SkDataTable::NewCopyArrays(NULL, NULL, 0));
-    SkAutoTUnref<SkDataTable> table2(SkDataTable::NewCopyArray(NULL, 0, 0));
-    SkAutoTUnref<SkDataTable> table3(SkDataTable::NewArrayProc(NULL, 0, 0,
-                                                               NULL, NULL));
+    SkAutoTUnref<SkDataTable> table1(SkDataTable::NewCopyArrays(nullptr, nullptr, 0));
+    SkAutoTUnref<SkDataTable> table2(SkDataTable::NewCopyArray(nullptr, 0, 0));
+    SkAutoTUnref<SkDataTable> table3(SkDataTable::NewArrayProc(nullptr, 0, 0,
+                                                               nullptr, nullptr));
 
     test_datatable_is_empty(reporter, table0);
     test_datatable_is_empty(reporter, table1);
@@ -122,7 +122,7 @@ static void test_globaltable(skiatest::Reporter* reporter) {
     int count = SK_ARRAY_COUNT(gData);
 
     SkAutoTUnref<SkDataTable> table(SkDataTable::NewArrayProc(gData,
-                                          sizeof(gData[0]), count, NULL, NULL));
+                                          sizeof(gData[0]), count, nullptr, nullptr));
 
     REPORTER_ASSERT(reporter, table->count() == count);
     for (int i = 0; i < count; ++i) {
@@ -143,7 +143,7 @@ DEF_TEST(DataTable, reporter) {
 
 static void* gGlobal;
 
-static void delete_int_proc(const void* ptr, size_t len, void* context) {
+static void delete_int_proc(const void* ptr, void* context) {
     int* data = (int*)ptr;
     SkASSERT(context == gGlobal);
     delete[] data;
@@ -168,7 +168,7 @@ static void test_cstring(skiatest::Reporter* reporter) {
 
     REPORTER_ASSERT(reporter, r0->equals(r1));
 
-    SkAutoTUnref<SkData> r2(SkData::NewWithCString(NULL));
+    SkAutoTUnref<SkData> r2(SkData::NewWithCString(nullptr));
     REPORTER_ASSERT(reporter, 1 == r2->size());
     REPORTER_ASSERT(reporter, 0 == *r2->bytes());
 }
@@ -191,15 +191,15 @@ static void test_files(skiatest::Reporter* reporter) {
         writer.write(s, 26);
     }
 
-    SkFILE* file = sk_fopen(path.c_str(), kRead_SkFILE_Flag);
+    FILE* file = sk_fopen(path.c_str(), kRead_SkFILE_Flag);
     SkAutoTUnref<SkData> r1(SkData::NewFromFILE(file));
-    REPORTER_ASSERT(reporter, r1.get() != NULL);
+    REPORTER_ASSERT(reporter, r1.get() != nullptr);
     REPORTER_ASSERT(reporter, r1->size() == 26);
     REPORTER_ASSERT(reporter, strncmp(static_cast<const char*>(r1->data()), s, 26) == 0);
 
     int fd = sk_fileno(file);
     SkAutoTUnref<SkData> r2(SkData::NewFromFD(fd));
-    REPORTER_ASSERT(reporter, r2.get() != NULL);
+    REPORTER_ASSERT(reporter, r2.get() != nullptr);
     REPORTER_ASSERT(reporter, r2->size() == 26);
     REPORTER_ASSERT(reporter, strncmp(static_cast<const char*>(r2->data()), s, 26) == 0);
 }
@@ -245,7 +245,7 @@ static void check_abcs(skiatest::Reporter* reporter, const char buffer[], size_t
     }
 }
 
-// stream should contains an integral number of copies of gABC.
+// stream should contain an integral number of copies of gABC.
 static void check_alphabet_stream(skiatest::Reporter* reporter, SkStream* stream) {
     REPORTER_ASSERT(reporter, stream->hasLength());
     size_t size = stream->getLength();
@@ -271,7 +271,7 @@ static void check_alphabet_stream(skiatest::Reporter* reporter, SkStream* stream
 static void check_alphabet_buffer(skiatest::Reporter* reporter, const SkROBuffer* reader) {
     size_t size = reader->size();
     REPORTER_ASSERT(reporter, size % 26 == 0);
-    
+
     SkAutoTMalloc<char> storage(size);
     SkROBuffer::Iter iter(reader);
     size_t offset = 0;
@@ -284,6 +284,8 @@ static void check_alphabet_buffer(skiatest::Reporter* reporter, const SkROBuffer
     check_abcs(reporter, storage.get(), size);
 }
 
+#include "SkTaskGroup.h"
+
 DEF_TEST(RWBuffer, reporter) {
     // Knowing that the default capacity is 4096, choose N large enough so we force it to use
     // multiple buffers internally.
@@ -294,22 +296,88 @@ DEF_TEST(RWBuffer, reporter) {
     {
         SkRWBuffer buffer;
         for (int i = 0; i < N; ++i) {
-            if (0 == (i & 1)) {
-                buffer.append(gABC, 26);
-            } else {
-                memcpy(buffer.append(26), gABC, 26);
-            }
+            buffer.append(gABC, 26);
             readers[i] = buffer.newRBufferSnapshot();
             streams[i] = buffer.newStreamSnapshot();
         }
         REPORTER_ASSERT(reporter, N*26 == buffer.size());
     }
 
+    // Verify that although the SkRWBuffer's destructor has run, the readers are still valid.
     for (int i = 0; i < N; ++i) {
         REPORTER_ASSERT(reporter, (i + 1) * 26U == readers[i]->size());
         check_alphabet_buffer(reporter, readers[i]);
         check_alphabet_stream(reporter, streams[i]);
         readers[i]->unref();
-        SkDELETE(streams[i]);
+        delete streams[i];
+    }
+}
+
+DEF_TEST(RWBuffer_threaded, reporter) {
+    // Knowing that the default capacity is 4096, choose N large enough so we force it to use
+    // multiple buffers internally.
+    const int N = 1000;
+    SkTaskGroup tasks;
+    SkRWBuffer buffer;
+    for (int i = 0; i < N; ++i) {
+        buffer.append(gABC, 26);
+        sk_sp<SkROBuffer> reader = sk_sp<SkROBuffer>(buffer.newRBufferSnapshot());
+        SkStream* stream = buffer.newStreamSnapshot();
+        REPORTER_ASSERT(reporter, reader->size() == buffer.size());
+        REPORTER_ASSERT(reporter, stream->getLength() == buffer.size());
+
+        // reader's copy constructor will ref the SkROBuffer, which will be unreffed
+        // when the task ends.
+        // Ownership of stream is passed to the task, which will delete it.
+        tasks.add([reporter, i, reader, stream] {
+            REPORTER_ASSERT(reporter, (i + 1) * 26U == reader->size());
+            REPORTER_ASSERT(reporter, stream->getLength() == reader->size());
+            check_alphabet_buffer(reporter, reader.get());
+            check_alphabet_stream(reporter, stream);
+            REPORTER_ASSERT(reporter, stream->rewind());
+            delete stream;
+        });
+    }
+    REPORTER_ASSERT(reporter, N*26 == buffer.size());
+    tasks.wait();
+}
+
+// Tests that it is safe to call SkROBuffer::Iter::size() when exhausted.
+DEF_TEST(RWBuffer_size, r) {
+    SkRWBuffer buffer;
+    buffer.append(gABC, 26);
+
+    SkAutoTUnref<SkROBuffer> roBuffer(buffer.newRBufferSnapshot());
+    SkROBuffer::Iter iter(roBuffer);
+    REPORTER_ASSERT(r, iter.data());
+    REPORTER_ASSERT(r, iter.size() == 26);
+
+    // There is only one block in this buffer.
+    REPORTER_ASSERT(r, !iter.next());
+    REPORTER_ASSERT(r, 0 == iter.size());
+}
+
+// Tests that operations (including the destructor) are safe on an SkRWBuffer
+// without any data appended.
+DEF_TEST(RWBuffer_noAppend, r) {
+    SkRWBuffer buffer;
+    REPORTER_ASSERT(r, 0 == buffer.size());
+
+    sk_sp<SkROBuffer> roBuffer = sk_sp<SkROBuffer>(buffer.newRBufferSnapshot());
+    REPORTER_ASSERT(r, roBuffer);
+    if (roBuffer) {
+        REPORTER_ASSERT(r, roBuffer->size() == 0);
+        SkROBuffer::Iter iter(roBuffer.get());
+        REPORTER_ASSERT(r, iter.size() == 0);
+        REPORTER_ASSERT(r, !iter.data());
+        REPORTER_ASSERT(r, !iter.next());
+    }
+
+    SkAutoTDelete<SkStream> stream(buffer.newStreamSnapshot());
+    REPORTER_ASSERT(r, stream);
+    if (stream) {
+        REPORTER_ASSERT(r, stream->hasLength());
+        REPORTER_ASSERT(r, stream->getLength() == 0);
+        REPORTER_ASSERT(r, stream->skip(10) == 0);
     }
 }

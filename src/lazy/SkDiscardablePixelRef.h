@@ -9,7 +9,7 @@
 #define SkDiscardablePixelRef_DEFINED
 
 #include "SkDiscardableMemory.h"
-#include "SkImageGenerator.h"
+#include "SkImageGeneratorPriv.h"
 #include "SkImageInfo.h"
 #include "SkPixelRef.h"
 
@@ -20,7 +20,10 @@
  */
 class SkDiscardablePixelRef : public SkPixelRef {
 public:
-    SK_DECLARE_INST_COUNT(SkDiscardablePixelRef)
+    
+    SkDiscardableMemory* diagnostic_only_getDiscardable() const override {
+        return fDiscardableMemory;
+    }
 
 protected:
     ~SkDiscardablePixelRef();
@@ -32,6 +35,8 @@ protected:
     SkData* onRefEncodedData() override {
         return fGenerator->refEncodedData();
     }
+
+    bool onIsLazyGenerated() const override { return true; }
 
 private:
     SkImageGenerator* const fGenerator;
@@ -49,19 +54,25 @@ private:
                           size_t rowBytes,
                           SkDiscardableMemory::Factory* factory);
 
-    bool onGetYUV8Planes(SkISize sizes[3],
-                         void* planes[3],
-                         size_t rowBytes[3],
-                         SkYUVColorSpace* colorSpace) override {
+    bool onQueryYUV8(SkYUVSizeInfo* sizeInfo, SkYUVColorSpace* colorSpace) const override {
         // If the image was already decoded with lockPixels(), favor not
         // re-decoding to YUV8 planes.
         if (fDiscardableMemory) {
             return false;
         }
-        return fGenerator->getYUV8Planes(sizes, planes, rowBytes, colorSpace);
+        return fGenerator->queryYUV8(sizeInfo, colorSpace);
     }
 
-    friend bool SkInstallDiscardablePixelRef(SkImageGenerator*, SkBitmap*,
+    bool onGetYUV8Planes(const SkYUVSizeInfo& sizeInfo, void* planes[3]) override {
+        // If the image was already decoded with lockPixels(), favor not
+        // re-decoding to YUV8 planes.
+        if (fDiscardableMemory) {
+            return false;
+        }
+        return fGenerator->getYUV8Planes(sizeInfo, planes);
+    }
+
+    friend bool SkDEPRECATED_InstallDiscardablePixelRef(SkImageGenerator*, const SkIRect*, SkBitmap*,
                                              SkDiscardableMemory::Factory*);
 
     typedef SkPixelRef INHERITED;

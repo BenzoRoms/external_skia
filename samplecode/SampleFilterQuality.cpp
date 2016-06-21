@@ -12,25 +12,36 @@
 #include "SkAnimTimer.h"
 #include "SkCanvas.h"
 #include "SkInterpolator.h"
+#include "SkGradientShader.h"
+#include "SkData.h"
+#include "SkPath.h"
 #include "SkSurface.h"
 #include "SkRandom.h"
 #include "SkTime.h"
 
-static SkSurface* make_surface(SkCanvas* canvas, const SkImageInfo& info) {
-    SkSurface* surface = canvas->newSurface(info);
+static sk_sp<SkSurface> make_surface(SkCanvas* canvas, const SkImageInfo& info) {
+    auto surface = canvas->makeSurface(info);
     if (!surface) {
-        surface = SkSurface::NewRaster(info);
+        surface = SkSurface::MakeRaster(info);
     }
     return surface;
+}
+
+static sk_sp<SkShader> make_shader(const SkRect& bounds) {
+    sk_sp<SkImage> image(GetResourceAsImage("mandrill_128.png"));
+    if (!image) {
+        return nullptr;
+    }
+    return image->makeShader(SkShader::kClamp_TileMode, SkShader::kClamp_TileMode);
 }
 
 #define N   128
 #define ANGLE_DELTA 3
 #define SCALE_DELTA (SK_Scalar1 / 32)
 
-static SkImage* make_image() {
+static sk_sp<SkImage> make_image() {
     SkImageInfo info = SkImageInfo::MakeN32(N, N, kOpaque_SkAlphaType);
-    SkAutoTUnref<SkSurface> surface(SkSurface::NewRaster(info));
+    auto surface(SkSurface::MakeRaster(info));
     SkCanvas* canvas = surface->getCanvas();
     canvas->drawColor(SK_ColorWHITE);
 
@@ -41,25 +52,28 @@ static SkImage* make_image() {
     path.addRect(SkRect::MakeWH(N, N/2));
     path.moveTo(0, 0); path.lineTo(N, 0); path.lineTo(0, N); path.close();
 
-    canvas->drawPath(path, SkPaint());
-    return surface->newImageSnapshot();
+    SkPaint paint;
+    paint.setShader(make_shader(SkRect::MakeWH(N, N)));
+
+    canvas->drawPath(path, paint);
+    return surface->makeImageSnapshot();
 }
 
-static SkImage* zoom_up(SkImage* orig) {
-    const SkScalar S = 8;    // amount to scale up
+static sk_sp<SkImage> zoom_up(SkSurface* origSurf, SkImage* orig) {
+    const SkScalar S = 16;    // amount to scale up
     const int D = 2;    // dimension scaling for the offscreen
     // since we only view the center, don't need to produce the entire thing
-    
+
     SkImageInfo info = SkImageInfo::MakeN32(orig->width() * D, orig->height() * D,
                                             kOpaque_SkAlphaType);
-    SkAutoTUnref<SkSurface> surface(orig->newSurface(info));
+    auto surface(origSurf->makeSurface(info));
     SkCanvas* canvas = surface->getCanvas();
     canvas->drawColor(SK_ColorWHITE);
     canvas->scale(S, S);
     canvas->translate(-SkScalarHalf(orig->width()) * (S - D) / S,
                       -SkScalarHalf(orig->height()) * (S - D) / S);
-    canvas->drawImage(orig, 0, 0, NULL);
-    
+    canvas->drawImage(orig, 0, 0, nullptr);
+
     if (S > 3) {
         SkPaint paint;
         paint.setColor(SK_ColorWHITE);
@@ -72,7 +86,7 @@ static SkImage* zoom_up(SkImage* orig) {
             canvas->drawLine(x, 0, x, SkIntToScalar(orig->height()), paint);
         }
     }
-    return surface->newImageSnapshot();
+    return surface->makeImageSnapshot();
 }
 
 struct AnimValue {
@@ -128,12 +142,12 @@ static void draw_box_frame(SkCanvas* canvas, int width, int height) {
 }
 
 class FilterQualityView : public SampleView {
-    SkAutoTUnref<SkImage> fImage;
-    AnimValue             fScale, fAngle;
-    SkSize              fCell;
-    SkInterpolator      fTrans;
-    SkMSec              fCurrTime;
-    bool                fShowFatBits;
+    sk_sp<SkImage>  fImage;
+    AnimValue       fScale, fAngle;
+    SkSize          fCell;
+    SkInterpolator  fTrans;
+    SkMSec          fCurrTime;
+    bool            fShowFatBits;
 
 public:
     FilterQualityView() : fImage(make_image()), fTrans(2, 2), fShowFatBits(true) {
@@ -164,11 +178,11 @@ protected:
         SkUnichar uni;
         if (SampleCode::CharQ(*evt, &uni)) {
             switch (uni) {
-                case '1': fAngle.inc(-ANGLE_DELTA); this->inval(NULL); return true;
-                case '2': fAngle.inc( ANGLE_DELTA); this->inval(NULL); return true;
-                case '3': fScale.inc(-SCALE_DELTA); this->inval(NULL); return true;
-                case '4': fScale.inc( SCALE_DELTA); this->inval(NULL); return true;
-                case '5': fShowFatBits = !fShowFatBits; this->inval(NULL); return true;
+                case '1': fAngle.inc(-ANGLE_DELTA); this->inval(nullptr); return true;
+                case '2': fAngle.inc( ANGLE_DELTA); this->inval(nullptr); return true;
+                case '3': fScale.inc(-SCALE_DELTA); this->inval(nullptr); return true;
+                case '4': fScale.inc( SCALE_DELTA); this->inval(nullptr); return true;
+                case '5': fShowFatBits = !fShowFatBits; this->inval(nullptr); return true;
                 default: break;
             }
         }
@@ -188,7 +202,7 @@ protected:
         canvas->translate(SkScalarHalf(size.width()), SkScalarHalf(size.height()));
         canvas->scale(fScale, fScale);
         canvas->rotate(fAngle);
-        canvas->drawImage(fImage, -SkScalarHalf(fImage->width()), -SkScalarHalf(fImage->height()),
+        canvas->drawImage(fImage.get(), -SkScalarHalf(fImage->width()), -SkScalarHalf(fImage->height()),
                           &paint);
 
         if (false) {
@@ -203,12 +217,12 @@ protected:
 
         SkISize size = SkISize::Make(fImage->width(), fImage->height());
 
-        SkAutoTUnref<SkSurface> surface;
+        sk_sp<SkSurface> surface;
         if (fShowFatBits) {
             // scale up so we don't clip rotations
             SkImageInfo info = SkImageInfo::MakeN32(fImage->width() * 2, fImage->height() * 2,
                                                     kOpaque_SkAlphaType);
-            surface.reset(make_surface(canvas, info));
+            surface = make_surface(canvas, info);
             canvas = surface->getCanvas();
             canvas->drawColor(SK_ColorWHITE);
             size.set(info.width(), info.height());
@@ -219,9 +233,9 @@ protected:
         this->drawTheImage(canvas, size, filter, dx, dy);
 
         if (surface) {
-            SkAutoTUnref<SkImage> orig(surface->newImageSnapshot());
-            SkAutoTUnref<SkImage> zoomed(zoom_up(orig));
-            origCanvas->drawImage(zoomed,
+            sk_sp<SkImage> orig(surface->makeImageSnapshot());
+            sk_sp<SkImage> zoomed(zoom_up(surface.get(), orig.get()));
+            origCanvas->drawImage(zoomed.get(),
                                   SkScalarHalf(fCell.width() - zoomed->width()),
                                   SkScalarHalf(fCell.height() - zoomed->height()));
         }
@@ -282,7 +296,7 @@ protected:
     }
 
     virtual bool handleKey(SkKey key) {
-        this->inval(NULL);
+        this->inval(nullptr);
         return true;
     }
 

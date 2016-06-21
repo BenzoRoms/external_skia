@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2010 Google Inc.
  *
@@ -9,9 +8,9 @@
 #ifndef GrTypes_DEFINED
 #define GrTypes_DEFINED
 
+#include "SkMath.h"
 #include "SkTypes.h"
 #include "GrConfig.h"
-#include "SkMath.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -127,7 +126,11 @@ static inline int GrNextPow2(int n) {
  */
 enum GrBackend {
     kOpenGL_GrBackend,
+    kVulkan_GrBackend,
+
+    kLast_GrBackend = kVulkan_GrBackend
 };
+const int kBackendCount = kLast_GrBackend + 1;
 
 /**
  * Backend-specific 3D context handle
@@ -177,15 +180,15 @@ static const int kMaskFormatCount = kLast_GrMaskFormat + 1;
  *  Return the number of bytes-per-pixel for the specified mask format.
  */
 static inline int GrMaskFormatBytesPerPixel(GrMaskFormat format) {
-    SkASSERT((unsigned)format < kMaskFormatCount);
+    SkASSERT(format < kMaskFormatCount);
     // kA8   (0) -> 1
     // kA565 (1) -> 2
     // kARGB (2) -> 4
     static const int sBytesPerPixel[] = { 1, 2, 4 };
-    SK_COMPILE_ASSERT(SK_ARRAY_COUNT(sBytesPerPixel) == kMaskFormatCount, array_size_mismatch);
-    SK_COMPILE_ASSERT(kA8_GrMaskFormat == 0, enum_order_dependency);
-    SK_COMPILE_ASSERT(kA565_GrMaskFormat == 1, enum_order_dependency);
-    SK_COMPILE_ASSERT(kARGB_GrMaskFormat == 2, enum_order_dependency);
+    static_assert(SK_ARRAY_COUNT(sBytesPerPixel) == kMaskFormatCount, "array_size_mismatch");
+    static_assert(kA8_GrMaskFormat == 0, "enum_order_dependency");
+    static_assert(kA565_GrMaskFormat == 1, "enum_order_dependency");
+    static_assert(kARGB_GrMaskFormat == 2, "enum_order_dependency");
 
     return sBytesPerPixel[(int) format];
 }
@@ -214,6 +217,10 @@ enum GrPixelConfig {
      * Premultiplied and sRGB. Byte order is r,g,b,a.
      */
     kSRGBA_8888_GrPixelConfig,
+    /**
+     * Premultiplied and sRGB. Byte order is b,g,r,a.
+     */
+    kSBGRA_8888_GrPixelConfig,
     /**
      * ETC1 Compressed Data
      */
@@ -250,7 +257,12 @@ enum GrPixelConfig {
      */
     kAlpha_half_GrPixelConfig,
 
-    kLast_GrPixelConfig = kAlpha_half_GrPixelConfig
+    /**
+    * Byte order is r, g, b, a.  This color format is 16 bits per channel
+    */
+    kRGBA_half_GrPixelConfig,
+
+    kLast_GrPixelConfig = kRGBA_half_GrPixelConfig
 };
 static const int kGrPixelConfigCnt = kLast_GrPixelConfig + 1;
 
@@ -260,8 +272,10 @@ static const int kGrPixelConfigCnt = kLast_GrPixelConfig + 1;
 #endif
 #if SK_PMCOLOR_BYTE_ORDER(B,G,R,A)
     static const GrPixelConfig kSkia8888_GrPixelConfig = kBGRA_8888_GrPixelConfig;
+    static const GrPixelConfig kSkiaGamma8888_GrPixelConfig = kSBGRA_8888_GrPixelConfig;
 #elif SK_PMCOLOR_BYTE_ORDER(R,G,B,A)
     static const GrPixelConfig kSkia8888_GrPixelConfig = kRGBA_8888_GrPixelConfig;
+    static const GrPixelConfig kSkiaGamma8888_GrPixelConfig = kSRGBA_8888_GrPixelConfig;
 #else
     #error "SK_*32_SHIFT values must correspond to GL_BGRA or GL_RGBA format."
 #endif
@@ -303,6 +317,19 @@ static inline bool GrPixelConfigIs8888(GrPixelConfig config) {
         case kRGBA_8888_GrPixelConfig:
         case kBGRA_8888_GrPixelConfig:
         case kSRGBA_8888_GrPixelConfig:
+        case kSBGRA_8888_GrPixelConfig:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// Returns true if the color (non-alpha) components represent sRGB values. It does NOT indicate that
+// all three color components are present in the config or anything about their order.
+static inline bool GrPixelConfigIsSRGB(GrPixelConfig config) {
+    switch (config) {
+        case kSRGBA_8888_GrPixelConfig:
+        case kSBGRA_8888_GrPixelConfig:
             return true;
         default:
             return false;
@@ -317,6 +344,10 @@ static inline GrPixelConfig GrPixelConfigSwapRAndB(GrPixelConfig config) {
             return kRGBA_8888_GrPixelConfig;
         case kRGBA_8888_GrPixelConfig:
             return kBGRA_8888_GrPixelConfig;
+        case kSBGRA_8888_GrPixelConfig:
+            return kSRGBA_8888_GrPixelConfig;
+        case kSRGBA_8888_GrPixelConfig:
+            return kSBGRA_8888_GrPixelConfig;
         default:
             return kUnknown_GrPixelConfig;
     }
@@ -334,28 +365,12 @@ static inline size_t GrBytesPerPixel(GrPixelConfig config) {
         case kRGBA_8888_GrPixelConfig:
         case kBGRA_8888_GrPixelConfig:
         case kSRGBA_8888_GrPixelConfig:
+        case kSBGRA_8888_GrPixelConfig:
             return 4;
+        case kRGBA_half_GrPixelConfig:
+            return 8;
         case kRGBA_float_GrPixelConfig:
             return 16;
-        default:
-            return 0;
-    }
-}
-
-static inline size_t GrUnpackAlignment(GrPixelConfig config) {
-    SkASSERT(!GrPixelConfigIsCompressed(config));
-    switch (config) {
-        case kAlpha_8_GrPixelConfig:
-            return 1;
-        case kRGB_565_GrPixelConfig:
-        case kRGBA_4444_GrPixelConfig:
-        case kAlpha_half_GrPixelConfig:
-            return 2;
-        case kRGBA_8888_GrPixelConfig:
-        case kBGRA_8888_GrPixelConfig:
-        case kSRGBA_8888_GrPixelConfig:
-        case kRGBA_float_GrPixelConfig:
-            return 4;
         default:
             return 0;
     }
@@ -395,6 +410,10 @@ enum GrSurfaceFlags {
      */
     kRenderTarget_GrSurfaceFlag     = 0x1,
     /**
+     * Placeholder for managing zero-copy textures
+     */
+    kZeroCopy_GrSurfaceFlag         = 0x2,
+    /**
      * Indicates that all allocations (color buffer, FBO completeness, etc)
      * should be verified.
      */
@@ -402,6 +421,9 @@ enum GrSurfaceFlags {
 };
 
 GR_MAKE_BITFIELD_OPS(GrSurfaceFlags)
+
+// opaque type for 3D API object handles
+typedef intptr_t GrBackendObject;
 
 /**
  * Some textures will be stored such that the upper and left edges of the content meet at the
@@ -416,6 +438,11 @@ enum GrSurfaceOrigin {
     kBottomLeft_GrSurfaceOrigin,
 };
 
+struct GrMipLevel {
+    const void* fPixels;
+    size_t fRowBytes;
+};
+
 /**
  * Describes a surface to be created.
  */
@@ -426,7 +453,8 @@ struct GrSurfaceDesc {
     , fWidth(0)
     , fHeight(0)
     , fConfig(kUnknown_GrPixelConfig)
-    , fSampleCnt(0) {
+    , fSampleCnt(0)
+    , fIsMipMapped(false) {
     }
 
     GrSurfaceFlags         fFlags;  //!< bitfield of TextureFlags
@@ -448,6 +476,7 @@ struct GrSurfaceDesc {
      * max supported count.
      */
     int                    fSampleCnt;
+    bool                   fIsMipMapped; //!< Indicates if the texture has mipmaps
 };
 
 // Legacy alias
@@ -463,8 +492,15 @@ enum GrClipType {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// opaque type for 3D API object handles
-typedef intptr_t GrBackendObject;
+
+/** Ownership rules for external GPU resources imported into Skia. */
+enum GrWrapOwnership {
+    /** Skia will assume the client will keep the resource alive and Skia will not free it. */
+    kBorrow_GrWrapOwnership,
+
+    /** Skia will assume ownership of the resource and free it. */
+    kAdopt_GrWrapOwnership,
+};
 
 /**
  * Gr can wrap an existing texture created by the client with a GrTexture
@@ -608,22 +644,4 @@ static inline size_t GrCompressedFormatDataSize(GrPixelConfig config,
  */
 static const uint32_t kAll_GrBackendState = 0xffffffff;
 
-///////////////////////////////////////////////////////////////////////////////
-
-#if GR_ALWAYS_ALLOCATE_ON_HEAP
-    #define GrAutoMallocBaseType SkAutoMalloc
-#else
-    #define GrAutoMallocBaseType SkAutoSMalloc<S>
-#endif
-
-template <size_t S> class GrAutoMalloc : public GrAutoMallocBaseType {
-public:
-    GrAutoMalloc() : INHERITED() {}
-    explicit GrAutoMalloc(size_t size) : INHERITED(size) {}
-    virtual ~GrAutoMalloc() {}
-private:
-    typedef GrAutoMallocBaseType INHERITED;
-};
-
-#undef GrAutoMallocBaseType
 #endif

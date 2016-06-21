@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2010 The Android Open Source Project
  *
@@ -30,7 +29,7 @@ class SkPDFObjNumMap;
 // The caller could keep track of the form XObjects it creates and
 // canonicalize them, but the Skia API doesn't provide enough context to
 // automatically do it (trivially).
-class SkPDFFormXObject : public SkPDFStream {
+class SkPDFFormXObject final : public SkPDFStream {
 public:
     /** Create a PDF form XObject. Entries for the dictionary entries are
      *  automatically added.

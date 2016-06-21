@@ -5,7 +5,7 @@
  * found in the LICENSE file.
  */
 
-#include "SkBitmapDevice.h"
+#include "SkCanvas.h"
 #include "SkImagePriv.h"
 #include "Test.h"
 
@@ -14,28 +14,26 @@ static const int gHeight = 20;
 
 // Tests that SkNewImageFromBitmap obeys pixelref origin.
 DEF_TEST(SkImageFromBitmap_extractSubset, reporter) {
-    SkAutoTUnref<SkImage> image;
+    sk_sp<SkImage> image;
     {
         SkBitmap srcBitmap;
         srcBitmap.allocN32Pixels(gWidth, gHeight);
         srcBitmap.eraseColor(SK_ColorRED);
-        SkBitmapDevice dev(srcBitmap);
-        SkCanvas canvas(&dev);
+        SkCanvas canvas(srcBitmap);
         SkIRect r = SkIRect::MakeXYWH(5, 5, gWidth - 5, gWidth - 5);
         SkPaint p;
         p.setColor(SK_ColorGREEN);
         canvas.drawIRect(r, p);
         SkBitmap dstBitmap;
         srcBitmap.extractSubset(&dstBitmap, r);
-        image.reset(SkNewImageFromBitmap(dstBitmap, true, NULL));
+        image = SkImage::MakeFromBitmap(dstBitmap);
     }
 
     SkBitmap tgt;
     tgt.allocN32Pixels(gWidth, gHeight);
-    SkBitmapDevice dev(tgt);
-    SkCanvas canvas(&dev);
+    SkCanvas canvas(tgt);
     canvas.clear(SK_ColorTRANSPARENT);
-    canvas.drawImage(image, 0, 0, NULL);
+    canvas.drawImage(image, 0, 0, nullptr);
 
     uint32_t pixel = 0;
     SkImageInfo info = SkImageInfo::Make(1, 1, kBGRA_8888_SkColorType, kUnpremul_SkAlphaType);

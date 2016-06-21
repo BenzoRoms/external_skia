@@ -6,9 +6,10 @@
  */
 
 #include "gm.h"
-#include "SkCanvas.h"
-#include "SkShader.h"
 #include "SkBlurMaskFilter.h"
+#include "SkCanvas.h"
+#include "SkPath.h"
+#include "SkShader.h"
 
 namespace skiagm {
 
@@ -20,11 +21,7 @@ class SamplerStressGM : public GM {
 public:
     SamplerStressGM()
     : fTextureCreated(false)
-    , fShader(NULL)
-    , fMaskFilter(NULL) {
-    }
-
-    virtual ~SamplerStressGM() {
+    , fMaskFilter(nullptr) {
     }
 
 protected:
@@ -68,24 +65,23 @@ protected:
     }
 
     void createShader() {
-        if (fShader.get()) {
+        if (fShader) {
             return;
         }
 
         createTexture();
 
-        fShader.reset(SkShader::CreateBitmapShader(fTexture,
-                                                   SkShader::kRepeat_TileMode,
-                                                   SkShader::kRepeat_TileMode));
+        fShader = SkShader::MakeBitmapShader(fTexture, SkShader::kRepeat_TileMode,
+                                             SkShader::kRepeat_TileMode);
     }
 
     void createMaskFilter() {
-        if (fMaskFilter.get()) {
+        if (fMaskFilter) {
             return;
         }
 
         const SkScalar sigma = 1;
-        fMaskFilter.reset(SkBlurMaskFilter::Create(kNormal_SkBlurStyle, sigma));
+        fMaskFilter = SkBlurMaskFilter::Make(kNormal_SkBlurStyle, sigma);
     }
 
     void onDraw(SkCanvas* canvas) override {
@@ -99,8 +95,9 @@ protected:
         SkPaint paint;
         paint.setAntiAlias(true);
         paint.setTextSize(72);
-        paint.setShader(fShader.get());
-        paint.setMaskFilter(fMaskFilter.get());
+        paint.setShader(fShader);
+        paint.setMaskFilter(fMaskFilter);
+        sk_tool_utils::set_portable_typeface(&paint);
 
         SkRect temp;
         temp.set(SkIntToScalar(115),
@@ -127,20 +124,21 @@ protected:
         paint2.setTextSize(72);
         paint2.setStyle(SkPaint::kStroke_Style);
         paint2.setStrokeWidth(1);
+        sk_tool_utils::set_portable_typeface(&paint2);
         canvas->drawText("M", 1,
                          SkIntToScalar(100), SkIntToScalar(100),
                          paint2);
 
-        paint2.setColor(SK_ColorGRAY);
+        paint2.setColor(sk_tool_utils::color_to_565(SK_ColorGRAY));
 
         canvas->drawPath(path, paint2);
     }
 
 private:
-    SkBitmap      fTexture;
-    bool          fTextureCreated;
-    SkAutoTUnref<SkShader>     fShader;
-    SkAutoTUnref<SkMaskFilter> fMaskFilter;
+    SkBitmap        fTexture;
+    bool            fTextureCreated;
+    sk_sp<SkShader> fShader;
+    sk_sp<SkMaskFilter> fMaskFilter;
 
     typedef GM INHERITED;
 };

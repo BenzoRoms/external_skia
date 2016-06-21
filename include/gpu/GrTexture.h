@@ -20,6 +20,7 @@ class GrTexture : virtual public GrSurface {
 public:
     GrTexture* asTexture() override { return this; }
     const GrTexture* asTexture() const override { return this; }
+    GrSLType samplerType() const { return fSamplerType; }
 
     /**
      *  Return the native ID or handle to the texture, depending on the
@@ -45,11 +46,12 @@ public:
     inline const GrTexturePriv texturePriv() const;
 
 protected:
-    GrTexture(GrGpu*, LifeCycle, const GrSurfaceDesc&);
+    GrTexture(GrGpu*, const GrSurfaceDesc&, GrSLType, bool wasMipMapDataProvided);
 
     void validateDesc() const;
 
 private:
+    void computeScratchKey(GrScratchKey*) const override;
     size_t onGpuMemorySize() const override;
     void dirtyMipMaps(bool mipMapsDirty);
 
@@ -59,54 +61,13 @@ private:
         kValid_MipMapsStatus
     };
 
+    GrSLType        fSamplerType;
     MipMapsStatus   fMipMapsStatus;
-    // These two shift a fixed-point value into normalized coordinates	
-    // for this texture if the texture is power of two sized.
-    int             fShiftFixedX;
-    int             fShiftFixedY;
+    int             fMaxMipMapLevel;
 
     friend class GrTexturePriv;
 
     typedef GrSurface INHERITED;
-};
-
-/**
- * Represents a texture that is intended to be accessed in device coords with an offset.
- */
-class GrDeviceCoordTexture {
-public:
-    GrDeviceCoordTexture() { fOffset.set(0, 0); }
-
-    GrDeviceCoordTexture(const GrDeviceCoordTexture& other) {
-        *this = other;
-    }
-
-    GrDeviceCoordTexture(GrTexture* texture, const SkIPoint& offset)
-        : fTexture(SkSafeRef(texture))
-        , fOffset(offset) {
-    }
-
-    GrDeviceCoordTexture& operator=(const GrDeviceCoordTexture& other) {
-        fTexture.reset(SkSafeRef(other.fTexture.get()));
-        fOffset = other.fOffset;
-        return *this;
-    }
-
-    const SkIPoint& offset() const { return fOffset; }
-
-    void setOffset(const SkIPoint& offset) { fOffset = offset; }
-    void setOffset(int ox, int oy) { fOffset.set(ox, oy); }
-
-    GrTexture* texture() const { return fTexture.get(); }
-
-    GrTexture* setTexture(GrTexture* texture) {
-        fTexture.reset(SkSafeRef(texture));
-        return texture;
-    }
-
-private:
-    SkAutoTUnref<GrTexture> fTexture;
-    SkIPoint                fOffset;
 };
 
 #endif

@@ -12,7 +12,7 @@
 
 
 SkDebugger::SkDebugger()
-    : fPicture(NULL)
+    : fPicture(nullptr)
     , fIndex(-1) {
     // Create this some other dynamic way?
     fDebugCanvas = new SkDebugCanvas(0, 0);
@@ -32,11 +32,11 @@ void SkDebugger::loadPicture(SkPicture* picture) {
                                      SkScalarCeilToInt(this->pictureCull().height()));
     fDebugCanvas->setPicture(picture);
     picture->playback(fDebugCanvas);
-    fDebugCanvas->setPicture(NULL);
+    fDebugCanvas->setPicture(nullptr);
     fIndex = fDebugCanvas->getSize() - 1;
 }
 
-SkPicture* SkDebugger::copyPicture() {
+sk_sp<SkPicture> SkDebugger::copyPicture() {
     // We can't just call clone here since we want to removed the "deleted"
     // commands. Playing back will strip those out.
     SkPictureRecorder recorder;
@@ -56,7 +56,7 @@ SkPicture* SkDebugger::copyPicture() {
     fDebugCanvas->setOverdrawViz(overDraw);
     fDebugCanvas->setAllowSimplifyClip(pathOps);
 
-    return recorder.endRecording();
+    return recorder.finishRecordingAsPicture();
 }
 
 void SkDebugger::getOverviewText(const SkTDArray<double>* typeTimes,
@@ -83,7 +83,7 @@ void SkDebugger::getOverviewText(const SkTDArray<double>* typeTimes,
     for (int i = 0; i < SkDrawCommand::kOpTypeCount; ++i) {
         if (0 == counts[i]) {
             // if there were no commands of this type then they should've consumed no time
-            SkASSERT(NULL == typeTimes || 0.0 == (*typeTimes)[i]);
+            SkASSERT(nullptr == typeTimes || 0.0 == (*typeTimes)[i]);
             continue;
         }
 

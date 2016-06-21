@@ -8,11 +8,8 @@
 #include "gm.h"
 #include "SkCanvas.h"
 #include "SkGradientShader.h"
+#include "SkPath.h"
 #include "SkSurface.h"
-
-#if SK_SUPPORT_GPU
-    #include "SkGpuDevice.h"
-#endif
 
 #define W   SkIntToScalar(80)
 #define H   SkIntToScalar(60)
@@ -20,16 +17,14 @@
 typedef void (*PaintProc)(SkPaint*);
 
 static void identity_paintproc(SkPaint* paint) {
-    paint->setShader(NULL);
+    paint->setShader(nullptr);
 }
 
 static void gradient_paintproc(SkPaint* paint) {
     const SkColor colors[] = { SK_ColorGREEN, SK_ColorBLUE };
     const SkPoint pts[] = { { 0, 0 }, { W, H } };
-    SkShader* s = SkGradientShader::CreateLinear(pts, colors, NULL,
-                                                 SK_ARRAY_COUNT(colors),
-                                                 SkShader::kClamp_TileMode);
-    paint->setShader(s)->unref();
+    paint->setShader(SkGradientShader::MakeLinear(pts, colors, nullptr, SK_ARRAY_COUNT(colors),
+                                                  SkShader::kClamp_TileMode));
 }
 
 typedef void (*Proc)(SkCanvas*, const SkPaint&);
@@ -81,7 +76,7 @@ protected:
 
         SkPaint paint;
         sk_tool_utils::set_portable_typeface(&paint);
-        paint.setColor(0x80FF0000);
+        paint.setColor(0x80F60000);
 
         const Proc procs[] = {
             draw_hair, draw_thick, draw_rect, draw_oval, draw_text
@@ -116,7 +111,7 @@ protected:
         }
     }
 
-    static SkSurface* compat_surface(SkCanvas* canvas, const SkISize& size, bool skipGPU) {
+    static sk_sp<SkSurface> compat_surface(SkCanvas* canvas, const SkISize& size, bool skipGPU) {
         SkImageInfo info = SkImageInfo::MakeN32Premul(size);
 
         bool callNewSurface = true;
@@ -125,20 +120,19 @@ protected:
             callNewSurface = false;
         }
 #endif
-        SkSurface* surface = callNewSurface ? canvas->newSurface(info) : NULL;
-        if (NULL == surface) {
+        sk_sp<SkSurface> surface = callNewSurface ? canvas->makeSurface(info) : nullptr;
+        if (nullptr == surface) {
             // picture canvas will return null, so fall-back to raster
-            surface = SkSurface::NewRaster(info);
+            surface = SkSurface::MakeRaster(info);
         }
         return surface;
     }
 
     virtual void onDraw(SkCanvas* canvas) {
-        SkAutoTUnref<SkSurface> surf(compat_surface(canvas, this->getISize(),
-                                                    this->isCanvasDeferred()));
+        auto surf(compat_surface(canvas, this->getISize(), this->isCanvasDeferred()));
         surf->getCanvas()->drawColor(SK_ColorWHITE);
         this->drawContent(surf->getCanvas());
-        surf->draw(canvas, 0, 0, NULL);
+        surf->draw(canvas, 0, 0, nullptr);
     }
 
 private:

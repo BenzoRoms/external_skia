@@ -10,29 +10,34 @@
 
 #include "SkColorFilter.h"
 #include "SkData.h"
-#include "SkMutex.h"
+#include "../private/SkOnce.h"
+#include "../private/SkTemplates.h"
 
 class SK_API SkColorCubeFilter : public SkColorFilter {
 public:
     /** cubeData must containt a 3D data in the form of cube of the size:
      *  cubeDimension * cubeDimension * cubeDimension * sizeof(SkColor)
      *  This cube contains a transform where (x,y,z) maps to the (r,g,b).
-     *  The alpha components of the colors are ignored (treated as 0xFF).
+     *  The alpha components of the colors must be 0xFF.
      */
+    static sk_sp<SkColorFilter> Make(sk_sp<SkData> cubeData, int cubeDimension);
+
+#ifdef SK_SUPPORT_LEGACY_COLORFILTER_PTR
     static SkColorFilter* Create(SkData* cubeData, int cubeDimension);
+#endif
 
     void filterSpan(const SkPMColor src[], int count, SkPMColor[]) const override;
     uint32_t getFlags() const override;
 
 #if SK_SUPPORT_GPU
-   bool asFragmentProcessors(GrContext*, SkTDArray<GrFragmentProcessor*>*) const override;
+    const GrFragmentProcessor* asFragmentProcessor(GrContext*) const override;
 #endif
 
     SK_TO_STRING_OVERRIDE()
     SK_DECLARE_PUBLIC_FLATTENABLE_DESERIALIZATION_PROCS(SkColorCubeFilter)
 
 protected:
-    SkColorCubeFilter(SkData* cubeData, int cubeDimension);
+    SkColorCubeFilter(sk_sp<SkData> cubeData, int cubeDimension);
     void flatten(SkWriteBuffer&) const override;
 
 private:
@@ -55,18 +60,17 @@ private:
         SkScalar* fColorToFactors[2];
         SkScalar* fColorToScalar;
 
-        SkAutoMalloc fLutStorage;
+        SkAutoTMalloc<uint8_t> fLutStorage;
 
         const int fCubeDimension;
 
         // Make sure we only initialize the caches once.
-        SkMutex fLutsMutex;
-        bool fLutsInited;
+        SkOnce fLutsInitOnce;
 
         static void initProcessingLuts(ColorCubeProcesingCache* cache);
     };
 
-    SkAutoDataUnref fCubeData;
+    sk_sp<SkData> fCubeData;
     int32_t fUniqueID;
 
     mutable ColorCubeProcesingCache fCache;

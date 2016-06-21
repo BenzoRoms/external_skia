@@ -59,8 +59,10 @@ protected:
         }
         SkUnichar uni;
         if (SampleCode::CharQ(*evt, &uni)) {
-            fMatchStr.appendUnichar(uni);
-            this->inval(NULL);
+            if (uni >= ' ') {
+                fMatchStr.appendUnichar(uni);
+            }
+            this->inval(nullptr);
             return true;
         }
         return this->INHERITED::onQuery(evt);
@@ -86,7 +88,7 @@ protected:
                 this->next(&loc);
             }
         }
-        return NULL;
+        return nullptr;
     }
 
 private:
@@ -119,7 +121,7 @@ private:
 };
 
 SkView* create_overview(int count, const SkViewFactory* factories[]) {
-    return SkNEW_ARGS(OverView, (count, factories));
+    return new OverView(count, factories);
 }
 
 bool is_overview(SkView* view) {
@@ -170,4 +172,3 @@ void OverView::onDraw(SkCanvas* canvas) {
         }
     }
 }
-

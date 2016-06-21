@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2013 Google Inc.
  *
@@ -9,6 +8,7 @@
 #include "gm.h"
 #include "SkBlurMask.h"
 #include "SkBlurMaskFilter.h"
+#include "SkPath.h"
 
 namespace skiagm {
 
@@ -19,7 +19,7 @@ namespace skiagm {
 class BigBlursGM : public GM {
 public:
     BigBlursGM() {
-        this->setBGColor(0xFFDDDDDD);
+        this->setBGColor(sk_tool_utils::color_to_565(0xFFDDDDDD));
     }
 
 protected:
@@ -70,8 +70,7 @@ protected:
 
         for (int i = 0; i < 2; ++i) {
             for (int j = 0; j <= kLastEnum_SkBlurStyle; ++j) {
-                SkMaskFilter* mf = SkBlurMaskFilter::Create((SkBlurStyle)j, kSigma);
-                blurPaint.setMaskFilter(mf)->unref();
+                blurPaint.setMaskFilter(SkBlurMaskFilter::Make((SkBlurStyle)j, kSigma));
 
                 for (int k = 0; k < (int)SK_ARRAY_COUNT(origins); ++k) {
                     canvas->save();
@@ -111,6 +110,5 @@ private:
     typedef GM INHERITED;
 };
 
-DEF_GM( return SkNEW(BigBlursGM); )
-
+DEF_GM(return new BigBlursGM;)
 }

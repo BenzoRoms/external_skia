@@ -25,36 +25,67 @@
         'tools.gyp:tools',
         'pathops_unittest.gyp:*',
         'pathops_skpclip.gyp:*',
-#       'pdfviewer.gyp:pdfviewer',
         'dm.gyp:dm',
+        'visualbench.gyp:visualbench',
+        'fuzz.gyp:fuzz',
+        'kilobench.gyp:kilobench',
+        'viewer.gyp:viewer',
       ],
       'conditions': [
+        [ 'skia_gpu == 0', {
+          'dependencies!': [
+            'visualbench.gyp:visualbench',
+            'kilobench.gyp:kilobench',
+            'viewer.gyp:viewer',
+          ]
+        }],
+        [ 'skia_os != "android" and skia_os != "linux"', {
+          'dependencies!': [
+            'kilobench.gyp:kilobench',
+          ],
+        }],
         [ 'skia_gpu == 0 or skia_os == "android"', {
           'dependencies!': [
             'example.gyp:HelloWorld',
           ],
         }],
-        ['skia_os == "android"', {
-          'dependencies': [ 'android_system.gyp:SampleApp_APK' ],
+        ['skia_os == "android" and skia_vulkan == 1', {
+          'dependencies': [
+            'android_system.gyp:Viewer_APK',
+          ],
         }],
         ['skia_os == "ios"', {
           'dependencies!': [
             'example.gyp:HelloWorld',
             'SampleApp.gyp:SampleApp',
+            'visualbench.gyp:visualbench',
           ],
           'dependencies': ['iOSShell.gyp:iOSShell' ],
         }],
         ['skia_os == "mac" or skia_os == "linux"', {
-          'dependencies': [ 'nanomsg.gyp:*' ],
+          'dependencies': [ 
+            'nanomsg.gyp:*' ,
+          ],
+        }],
+        ['skia_os in ["linux", "mac", "win"]', {
+          'dependencies': [
+            'skiaserve.gyp:skiaserve',
+          ],
+        }],
+        [ 'skia_vulkan == 0 or (skia_os != "win" and skia_os != "android")', {
+          'dependencies!': [
+            'viewer.gyp:viewer',
+          ],
         }],
         [ 'skia_skip_gui',
           {
             'dependencies!': [
               'example.gyp:HelloWorld',
               'SampleApp.gyp:SampleApp',
+              'visualbench.gyp:visualbench',
             ]
           }
-        ]
+        ],
       ],
     },
   ],

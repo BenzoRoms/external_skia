@@ -16,7 +16,7 @@ class SkReadBuffer;
 class SkWriteBuffer;
 
 /**
- *  Describes how to interpret the alpha compoent of a pixel.
+ *  Describes how to interpret the alpha component of a pixel.
  */
 enum SkAlphaType {
     kUnknown_SkAlphaType,
@@ -73,8 +73,9 @@ enum SkColorType {
     kBGRA_8888_SkColorType,
     kIndex_8_SkColorType,
     kGray_8_SkColorType,
+    kRGBA_F16_SkColorType,
 
-    kLastEnum_SkColorType = kGray_8_SkColorType,
+    kLastEnum_SkColorType = kRGBA_F16_SkColorType,
 
 #if SK_PMCOLOR_BYTE_ORDER(B,G,R,A)
     kN32_SkColorType = kBGRA_8888_SkColorType,
@@ -95,12 +96,32 @@ static int SkColorTypeBytesPerPixel(SkColorType ct) {
         4,  // BGRA_8888
         1,  // kIndex_8
         1,  // kGray_8
+        8,  // kRGBA_F16
     };
-    SK_COMPILE_ASSERT(SK_ARRAY_COUNT(gSize) == (size_t)(kLastEnum_SkColorType + 1),
-                      size_mismatch_with_SkColorType_enum);
+    static_assert(SK_ARRAY_COUNT(gSize) == (size_t)(kLastEnum_SkColorType + 1),
+                  "size_mismatch_with_SkColorType_enum");
 
     SkASSERT((size_t)ct < SK_ARRAY_COUNT(gSize));
     return gSize[ct];
+}
+
+static int SkColorTypeShiftPerPixel(SkColorType ct) {
+    static const uint8_t gShift[] = {
+        0,  // Unknown
+        0,  // Alpha_8
+        1,  // RGB_565
+        1,  // ARGB_4444
+        2,  // RGBA_8888
+        2,  // BGRA_8888
+        0,  // kIndex_8
+        0,  // kGray_8
+        3,  // kRGBA_F16
+    };
+    static_assert(SK_ARRAY_COUNT(gShift) == (size_t)(kLastEnum_SkColorType + 1),
+                  "size_mismatch_with_SkColorType_enum");
+    
+    SkASSERT((size_t)ct < SK_ARRAY_COUNT(gShift));
+    return gShift[ct];
 }
 
 static inline size_t SkColorTypeMinRowBytes(SkColorType ct, int width) {
@@ -109,6 +130,13 @@ static inline size_t SkColorTypeMinRowBytes(SkColorType ct, int width) {
 
 static inline bool SkColorTypeIsValid(unsigned value) {
     return value <= kLastEnum_SkColorType;
+}
+
+static inline size_t SkColorTypeComputeOffset(SkColorType ct, int x, int y, size_t rowBytes) {
+    if (kUnknown_SkColorType == ct) {
+        return 0;
+    }
+    return y * rowBytes + (x << SkColorTypeShiftPerPixel(ct));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -131,8 +159,11 @@ enum SkYUVColorSpace {
     /** SDTV standard Rec. 601 color space. Uses "studio swing" [16, 235] color
        range. See http://en.wikipedia.org/wiki/Rec._601 for details. */
     kRec601_SkYUVColorSpace,
+    /** HDTV standard Rec. 709 color space. Uses "studio swing" [16, 235] color
+       range. See http://en.wikipedia.org/wiki/Rec._709 for details. */
+    kRec709_SkYUVColorSpace,
 
-    kLastEnum_SkYUVColorSpace = kRec601_SkYUVColorSpace
+    kLastEnum_SkYUVColorSpace = kRec709_SkYUVColorSpace
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -235,9 +266,9 @@ public:
         return SkImageInfo::Make(fWidth, fHeight, newColorType, fAlphaType, fProfileType);
     }
 
-    int bytesPerPixel() const {
-        return SkColorTypeBytesPerPixel(fColorType);
-    }
+    int bytesPerPixel() const { return SkColorTypeBytesPerPixel(fColorType); }
+
+    int shiftPerPixel() const { return SkColorTypeShiftPerPixel(fColorType); }
 
     uint64_t minRowBytes64() const {
         return sk_64_mul(fWidth, this->bytesPerPixel());
@@ -245,6 +276,12 @@ public:
 
     size_t minRowBytes() const {
         return (size_t)this->minRowBytes64();
+    }
+
+    size_t computeOffset(int x, int y, size_t rowBytes) const {
+        SkASSERT((unsigned)x < (unsigned)fWidth);
+        SkASSERT((unsigned)y < (unsigned)fHeight);
+        return SkColorTypeComputeOffset(fColorType, x, y, rowBytes);
     }
 
     bool operator==(const SkImageInfo& other) const {
@@ -265,7 +302,11 @@ public:
     }
 
     size_t getSafeSize(size_t rowBytes) const {
-        return (size_t)this->getSafeSize64(rowBytes);
+        int64_t size = this->getSafeSize64(rowBytes);
+        if (!sk_64_isS32(size)) {
+            return 0;
+        }
+        return sk_64_asS32(size);
     }
 
     bool validRowBytes(size_t rowBytes) const {
@@ -275,17 +316,13 @@ public:
 
     SkDEBUGCODE(void validate() const;)
 
-#ifdef SK_SUPPORT_LEGACY_PUBLIC_IMAGEINFO_FIELDS
-public:
-#else
 private:
-#endif
     int                 fWidth;
     int                 fHeight;
     SkColorType         fColorType;
     SkAlphaType         fAlphaType;
+    SkColorProfileType  fProfileType;
 
-private:
     SkImageInfo(int width, int height, SkColorType ct, SkAlphaType at, SkColorProfileType pt)
         : fWidth(width)
         , fHeight(height)
@@ -293,8 +330,16 @@ private:
         , fAlphaType(at)
         , fProfileType(pt)
     {}
-
-    SkColorProfileType  fProfileType;
 };
+
+///////////////////////////////////////////////////////////////////////////////
+
+static inline bool SkColorAndProfileAreGammaCorrect(SkColorType ct, SkColorProfileType pt) {
+    return kSRGB_SkColorProfileType == pt || kRGBA_F16_SkColorType == ct;
+}
+
+static inline bool SkImageInfoIsGammaCorrect(const SkImageInfo& info) {
+    return SkColorAndProfileAreGammaCorrect(info.colorType(), info.profileType());
+}
 
 #endif

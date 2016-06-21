@@ -16,44 +16,34 @@ namespace skiagm {
 static uint16_t gData[] = { 0xFFFF, 0xCCCF, 0xCCCF, 0xFFFF };
 
 class ColorTypeXfermodeGM : public GM {
-    SkBitmap    fBG;
-
-    void onOnceBeforeDraw() override {
-        fBG.installPixels(SkImageInfo::Make(2, 2, kARGB_4444_SkColorType,
-                                            kOpaque_SkAlphaType), gData, 4);
-    }
-
 public:
     const static int W = 64;
     const static int H = 64;
-    ColorTypeXfermodeGM() {
+    ColorTypeXfermodeGM() {}
+
+protected:
+    void onOnceBeforeDraw() override {
         const SkColor colors[] = {
             SK_ColorRED, SK_ColorGREEN, SK_ColorBLUE,
             SK_ColorMAGENTA, SK_ColorCYAN, SK_ColorYELLOW
         };
         SkMatrix local;
         local.setRotate(180);
-        SkShader* s = SkGradientShader::CreateSweep(0,0, colors, NULL,
-                                                    SK_ARRAY_COUNT(colors), 0, &local);
-
         SkPaint paint;
         paint.setAntiAlias(true);
-        paint.setShader(s)->unref();
+        paint.setShader(SkGradientShader::MakeSweep(0, 0, colors, nullptr, SK_ARRAY_COUNT(colors),
+                                                    0, &local));
 
-        SkTypeface* orig = sk_tool_utils::create_portable_typeface("Times",
-                                                            SkTypeface::kBold);
-        if (NULL == orig) {
-            orig = SkTypeface::RefDefault();
+        sk_sp<SkTypeface> orig(sk_tool_utils::create_portable_typeface("serif", SkTypeface::kBold));
+        if (nullptr == orig) {
+            orig = SkTypeface::MakeDefault();
         }
-        fColorType = SkNEW_ARGS(SkGTypeface, (orig, paint));
-        orig->unref();
+        fColorType = sk_make_sp<SkGTypeface>(orig, paint);
+
+        fBG.installPixels(SkImageInfo::Make(2, 2, kARGB_4444_SkColorType,
+                                            kOpaque_SkAlphaType), gData, 4);
     }
 
-    virtual ~ColorTypeXfermodeGM() {
-        fColorType->unref();
-    }
-
-protected:
     virtual SkString onShortName() override {
         return SkString("colortype_xfermodes");
     }
@@ -105,10 +95,8 @@ protected:
         const SkScalar h = SkIntToScalar(H);
         SkMatrix m;
         m.setScale(SkIntToScalar(6), SkIntToScalar(6));
-        SkShader* s = SkShader::CreateBitmapShader(fBG,
-                                                   SkShader::kRepeat_TileMode,
-                                                   SkShader::kRepeat_TileMode,
-                                                   &m);
+        auto s = SkShader::MakeBitmapShader(fBG, SkShader::kRepeat_TileMode,
+                                            SkShader::kRepeat_TileMode, &m);
 
         SkPaint labelP;
         labelP.setAntiAlias(true);
@@ -126,8 +114,6 @@ protected:
         SkScalar y0 = 0;
         SkScalar x = x0, y = y0;
         for (size_t i = 0; i < SK_ARRAY_COUNT(gModes); i++) {
-            SkXfermode* mode = SkXfermode::Create(gModes[i].fMode);
-            SkAutoUnref aur(mode);
             SkRect r;
             r.set(x, y, x+w, y+h);
 
@@ -138,10 +124,10 @@ protected:
 
             r.inset(-SK_ScalarHalf, -SK_ScalarHalf);
             p.setStyle(SkPaint::kStroke_Style);
-            p.setShader(NULL);
+            p.setShader(nullptr);
             canvas->drawRect(r, p);
 
-            textP.setXfermode(mode);
+            textP.setXfermode(SkXfermode::Make(gModes[i].fMode));
             canvas->drawText("H", 1, x+ w/10.f, y + 7.f*h/8.f, textP);
 #if 1
             canvas->drawText(gModes[i].fLabel, strlen(gModes[i].fLabel),
@@ -153,11 +139,11 @@ protected:
                 y += h + SkIntToScalar(30);
             }
         }
-        s->unref();
     }
 
 private:
-    SkTypeface* fColorType;
+    SkBitmap            fBG;
+    sk_sp<SkTypeface>   fColorType;
 
     typedef GM INHERITED;
 };

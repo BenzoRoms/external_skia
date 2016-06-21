@@ -9,39 +9,45 @@
 #define GrPath_DEFINED
 
 #include "GrGpuResource.h"
+#include "GrPathRendering.h"
+#include "GrStyle.h"
 #include "SkPath.h"
 #include "SkRect.h"
-#include "SkStrokeRec.h"
 
 class GrPath : public GrGpuResource {
 public:
-    SK_DECLARE_INST_COUNT(GrPath);
-
     /**
      * Initialize to a path with a fixed stroke. Stroke must not be hairline.
      */
-    GrPath(GrGpu* gpu, const SkPath& skPath, const SkStrokeRec& stroke)
-        : INHERITED(gpu, kCached_LifeCycle),
-          fSkPath(skPath),
-          fStroke(stroke),
-          fBounds(skPath.getBounds()) {
+    GrPath(GrGpu* gpu, const SkPath& skPath, const GrStyle& style)
+        : INHERITED(gpu)
+        , fBounds(SkRect::MakeEmpty())
+        , fFillType(GrPathRendering::kWinding_FillType)
+#ifdef SK_DEBUG
+        , fSkPath(skPath)
+        , fStyle(style)
+#endif
+    {
     }
 
-    static void ComputeKey(const SkPath& path, const SkStrokeRec& stroke, GrUniqueKey* key);
-    static uint64_t ComputeStrokeKey(const SkStrokeRec&);
-
-    bool isEqualTo(const SkPath& path, const SkStrokeRec& stroke) {
-        return fSkPath == path && fStroke.hasEqualEffect(stroke);
-    }
+    static void ComputeKey(const SkPath& path, const GrStyle& style, GrUniqueKey* key,
+                           bool* outIsVolatile);
 
     const SkRect& getBounds() const { return fBounds; }
 
-    const SkStrokeRec& getStroke() const { return fStroke; }
+    GrPathRendering::FillType getFillType() const { return fFillType; }
+#ifdef SK_DEBUG
+    bool isEqualTo(const SkPath& path, const GrStyle& style) const;
+#endif
 
 protected:
-    SkPath fSkPath;
-    SkStrokeRec fStroke;
+    // Subclass should init these.
     SkRect fBounds;
+    GrPathRendering::FillType fFillType;
+#ifdef SK_DEBUG
+    SkPath fSkPath;
+    GrStyle fStyle;
+#endif
 
 private:
     typedef GrGpuResource INHERITED;

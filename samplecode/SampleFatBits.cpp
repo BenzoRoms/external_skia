@@ -41,12 +41,13 @@ public:
     FatBits() {
         fAA = false;
         fStyle = kHair_Style;
-        fGrid = true;
+        fGrid = false;
         fShowSkeleton = true;
         fUseGPU = false;
         fUseClip = false;
         fRectAsOval = false;
         fUseTriangle = false;
+        fStrokeCap = SkPaint::kButt_Cap;
 
         fClipRect.set(2, 2, 11, 8 );
     }
@@ -87,13 +88,12 @@ public:
         fBounds.set(0, 0, SkIntToScalar(width * zoom), SkIntToScalar(height * zoom));
         fMatrix.setScale(SkIntToScalar(zoom), SkIntToScalar(zoom));
         fInverse.setScale(SK_Scalar1 / zoom, SK_Scalar1 / zoom);
-        fShader.reset(sk_tool_utils::create_checkerboard_shader(
-                              0xFFCCCCCC, 0xFFFFFFFF, zoom));
+        fShader = sk_tool_utils::create_checkerboard_shader(0xFFCCCCCC, 0xFFFFFFFF, zoom);
 
         SkImageInfo info = SkImageInfo::MakeN32Premul(width, height);
-        fMinSurface.reset(SkSurface::NewRaster(info));
+        fMinSurface = SkSurface::MakeRaster(info);
         info = info.makeWH(width * zoom, height * zoom);
-        fMaxSurface.reset(SkSurface::NewRaster(info));
+        fMaxSurface = SkSurface::MakeRaster(info);
     }
 
     void drawBG(SkCanvas*);
@@ -102,18 +102,21 @@ public:
     void drawRect(SkCanvas* canvas, SkPoint pts[2]);
     void drawTriangle(SkCanvas* canvas, SkPoint pts[3]);
 
+    SkPaint::Cap fStrokeCap;
+
 private:
     bool fAA, fGrid, fShowSkeleton, fUseGPU, fUseClip, fRectAsOval, fUseTriangle;
     Style fStyle;
     int fW, fH, fZoom;
     SkMatrix fMatrix, fInverse;
     SkRect   fBounds, fClipRect;
-    SkAutoTUnref<SkShader> fShader;
-    SkAutoTUnref<SkSurface> fMinSurface;
-    SkAutoTUnref<SkSurface> fMaxSurface;
+    sk_sp<SkShader> fShader;
+    sk_sp<SkSurface> fMinSurface;
+    sk_sp<SkSurface> fMaxSurface;
 
     void setupPaint(SkPaint* paint) {
         bool aa = this->getAA();
+        paint->setStrokeCap(fStrokeCap);
         switch (fStyle) {
             case kHair_Style:
                 paint->setStrokeWidth(0);
@@ -159,11 +162,11 @@ private:
     }
 
     void copyMinToMax() {
-        erase(fMaxSurface);
+        erase(fMaxSurface.get());
         SkCanvas* canvas = fMaxSurface->getCanvas();
         canvas->save();
         canvas->concat(fMatrix);
-        fMinSurface->draw(canvas, 0, 0, NULL);
+        fMinSurface->draw(canvas, 0, 0, nullptr);
         canvas->restore();
 
         SkPaint paint;
@@ -184,7 +187,7 @@ void FatBits::drawBG(SkCanvas* canvas) {
 
     paint.setShader(fShader);
     canvas->drawRect(fBounds, paint);
-    paint.setShader(NULL);
+    paint.setShader(nullptr);
 }
 
 void FatBits::drawFG(SkCanvas* canvas) {
@@ -246,9 +249,13 @@ void FatBits::drawLineSkeleton(SkCanvas* max, const SkPoint pts[]) {
             SkPaint p;
             p.setStyle(SkPaint::kStroke_Style);
             p.setStrokeWidth(SK_Scalar1 * fZoom);
+            p.setStrokeCap(fStrokeCap);
             SkPath dst;
             p.getFillPath(path, &dst);
             path = dst;
+
+            path.moveTo(pts[0]);
+            path.lineTo(pts[1]);
 
             if (fUseGPU) {
                 path.moveTo(dst.getPoint(0));
@@ -268,7 +275,7 @@ void FatBits::drawLine(SkCanvas* canvas, SkPoint pts[]) {
         apply_grid(pts, 2);
     }
 
-    erase(fMinSurface);
+    erase(fMinSurface.get());
     this->setupPaint(&paint);
     paint.setColor(FAT_PIXEL_COLOR);
     if (fUseClip) {
@@ -288,7 +295,7 @@ void FatBits::drawLine(SkCanvas* canvas, SkPoint pts[]) {
     fMatrix.mapPoints(pts, 2);
     this->drawLineSkeleton(max, pts);
 
-    fMaxSurface->draw(canvas, 0, 0, NULL);
+    fMaxSurface->draw(canvas, 0, 0, nullptr);
 }
 
 void FatBits::drawRect(SkCanvas* canvas, SkPoint pts[2]) {
@@ -303,7 +310,7 @@ void FatBits::drawRect(SkCanvas* canvas, SkPoint pts[2]) {
     SkRect r;
     r.set(pts, 2);
 
-    erase(fMinSurface);
+    erase(fMinSurface.get());
     this->setupPaint(&paint);
     paint.setColor(FAT_PIXEL_COLOR);
     {
@@ -318,7 +325,7 @@ void FatBits::drawRect(SkCanvas* canvas, SkPoint pts[2]) {
     r.set(pts, 2);
     this->drawRectSkeleton(max, r);
 
-    fMaxSurface->draw(canvas, 0, 0, NULL);
+    fMaxSurface->draw(canvas, 0, 0, nullptr);
 }
 
 void FatBits::drawTriangleSkeleton(SkCanvas* max, const SkPoint pts[]) {
@@ -349,7 +356,7 @@ void FatBits::drawTriangle(SkCanvas* canvas, SkPoint pts[3]) {
     path.lineTo(pts[2]);
     path.close();
 
-    erase(fMinSurface);
+    erase(fMinSurface.get());
     this->setupPaint(&paint);
     paint.setColor(FAT_PIXEL_COLOR);
     fMinSurface->getCanvas()->drawPath(path, paint);
@@ -360,7 +367,7 @@ void FatBits::drawTriangle(SkCanvas* canvas, SkPoint pts[3]) {
     fMatrix.mapPoints(pts, 3);
     this->drawTriangleSkeleton(max, pts);
 
-    fMaxSurface->draw(canvas, 0, 0, NULL);
+    fMaxSurface->draw(canvas, 0, 0, nullptr);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -376,21 +383,26 @@ public:
 };
 
 class DrawLineView : public SampleView {
+    enum {
+        kZoom = 96
+    };
+
     FatBits fFB;
     SkPoint fPts[3];
     bool    fIsRect;
 public:
     DrawLineView() {
-        fFB.setWHZ(24, 16, 48);
-        fPts[0].set(48, 48);
-        fPts[1].set(48 * 5, 48 * 4);
-        fPts[2].set(48 * 2, 48 * 6);
+        fFB.setWHZ(24, 16, kZoom);
+        fPts[0].set(1, 1);
+        fPts[1].set(5, 4);
+        fPts[2].set(2, 6);
+        SkMatrix::MakeScale(kZoom, kZoom).mapPoints(fPts, 3);
         fIsRect = false;
     }
 
     void setStyle(FatBits::Style s) {
         fFB.setStyle(s);
-        this->inval(NULL);
+        this->inval(nullptr);
     }
 
 protected:
@@ -404,19 +416,19 @@ protected:
             switch (uni) {
                 case 'c':
                     fFB.setUseClip(!fFB.getUseClip());
-                    this->inval(NULL);
+                    this->inval(nullptr);
                     return true;
                 case 'r':
                     fIsRect = !fIsRect;
-                    this->inval(NULL);
+                    this->inval(nullptr);
                     return true;
                 case 'o':
                     fFB.toggleRectAsOval();
-                    this->inval(NULL);
+                    this->inval(nullptr);
                     return true;
                 case 'x':
                     fFB.setGrid(!fFB.getGrid());
-                    this->inval(NULL);
+                    this->inval(nullptr);
                     return true;
                 case 's':
                     if (FatBits::kStroke_Style == fFB.getStyle()) {
@@ -425,28 +437,36 @@ protected:
                         this->setStyle(FatBits::kStroke_Style);
                     }
                     return true;
+                case 'k': {
+                    const SkPaint::Cap caps[] = {
+                        SkPaint::kButt_Cap, SkPaint::kRound_Cap, SkPaint::kSquare_Cap,
+                    };
+                    fFB.fStrokeCap = caps[(fFB.fStrokeCap + 1) % 3];
+                    this->inval(nullptr);
+                    return true;
+                } break;
                 case 'a':
                     fFB.setAA(!fFB.getAA());
-                    this->inval(NULL);
+                    this->inval(nullptr);
                     return true;
                 case 'w':
                     fFB.setShowSkeleton(!fFB.getShowSkeleton());
-                    this->inval(NULL);
+                    this->inval(nullptr);
                     return true;
                 case 'g':
                     fFB.setUseGPU(!fFB.getUseGPU());
-                    this->inval(NULL);
+                    this->inval(nullptr);
                     return true;
                 case 't':
                     fFB.setTriangle(!fFB.getTriangle());
-                    this->inval(NULL);
+                    this->inval(nullptr);
                     return true;
             }
         }
         return this->INHERITED::onQuery(evt);
     }
 
-    virtual void onDrawContent(SkCanvas* canvas) {
+    void onDrawContent(SkCanvas* canvas) override {
         fFB.drawBG(canvas);
         if (fFB.getTriangle()) {
             fFB.drawTriangle(canvas, fPts);
@@ -473,8 +493,7 @@ protected:
         }
     }
 
-    virtual SkView::Click* onFindClickHandler(SkScalar x, SkScalar y,
-                                              unsigned modi) override {
+    SkView::Click* onFindClickHandler(SkScalar x, SkScalar y, unsigned modi) override {
         SkPoint pt = { x, y };
         int index = -1;
         int count = fFB.getTriangle() ? 3 : 2;
@@ -500,7 +519,7 @@ protected:
             fPts[1].offset(dx, dy);
             fPts[2].offset(dx, dy);
         }
-        this->inval(NULL);
+        this->inval(nullptr);
         return true;
     }
 

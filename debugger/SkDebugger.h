@@ -58,7 +58,7 @@ public:
 
     void loadPicture(SkPicture* picture);
 
-    SkPicture* copyPicture();
+    sk_sp<SkPicture> copyPicture();
 
     int getSize() const {
         return fDebugCanvas->getSize();
@@ -86,7 +86,7 @@ public:
     }
 
     SkRect pictureCull() const   { 
-        return NULL == fPicture ? SkRect::MakeEmpty() : fPicture->cullRect();
+        return nullptr == fPicture ? SkRect::MakeEmpty() : fPicture->cullRect();
     }
 
     int index() {

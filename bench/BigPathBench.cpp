@@ -8,11 +8,7 @@
 #include "Benchmark.h"
 #include "SkCanvas.h"
 #include "SkPath.h"
-#include "SkString.h"
-
-static void make_path(SkPath& path) {
-    #include "BigPathBench.inc"
-}
+#include "sk_tool_utils.h"
 
 enum Align {
     kLeft_Align,
@@ -46,11 +42,11 @@ protected:
         return SkIPoint::Make(640, 100);
     }
 
-    void onPreDraw() override {
-        make_path(fPath);
+    void onDelayedSetup() override {
+        sk_tool_utils::make_big_path(fPath);
     }
 
-    void onDraw(const int loops, SkCanvas* canvas) override {
+    void onDraw(int loops, SkCanvas* canvas) override {
         SkPaint paint;
         paint.setAntiAlias(true);
         paint.setStyle(SkPaint::kStroke_Style);
@@ -88,4 +84,3 @@ DEF_BENCH( return new BigPathBench(kRight_Align,    false); )
 DEF_BENCH( return new BigPathBench(kLeft_Align,     true); )
 DEF_BENCH( return new BigPathBench(kMiddle_Align,   true); )
 DEF_BENCH( return new BigPathBench(kRight_Align,    true); )
-

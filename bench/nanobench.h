@@ -22,16 +22,19 @@ class SkBitmap;
 class SkCanvas;
 
 struct Config {
-    const char* name;
+    SkString name;
     Benchmark::Backend backend;
     SkColorType color;
     SkAlphaType alpha;
+    SkColorProfileType profile;
     int samples;
 #if SK_SUPPORT_GPU
-    GrContextFactory::GLContextType ctxType;
+    sk_gpu_test::GrContextFactory::ContextType ctxType;
+    sk_gpu_test::GrContextFactory::ContextOptions ctxOptions;
     bool useDFText;
 #else
     int bogusInt;
+    int bogusIntOption;
     bool bogusBool;
 #endif
 };
@@ -41,7 +44,7 @@ struct Target {
     virtual ~Target() { }
 
     const Config config;
-    SkAutoTDelete<SkSurface> surface;
+    sk_sp<SkSurface> surface;
 
     /** Called once per target, immediately before any timing or drawing. */
     virtual void setup() { }
@@ -63,7 +66,7 @@ struct Target {
     /** CPU-like targets can just be timed, but GPU-like
         targets need to pay attention to frame boundaries
         or other similar details. */
-    virtual bool needsFrameTiming() const { return false; }
+    virtual bool needsFrameTiming(int* frameLag) const { return false; }
 
     /** Called once per target, during program initialization.
         Returns false if initialization fails. */
@@ -78,7 +81,7 @@ struct Target {
 
     SkCanvas* getCanvas() const {
         if (!surface.get()) {
-            return NULL;
+            return nullptr;
         }
         return surface->getCanvas();
     }

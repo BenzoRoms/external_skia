@@ -8,6 +8,7 @@
 #ifndef SkWindow_DEFINED
 #define SkWindow_DEFINED
 
+#include "../private/SkTDArray.h"
 #include "SkView.h"
 #include "SkBitmap.h"
 #include "SkMatrix.h"
@@ -15,12 +16,6 @@
 #include "SkEvent.h"
 #include "SkKey.h"
 #include "SkSurfaceProps.h"
-#include "SkTDArray.h"
-
-#ifdef SK_BUILD_FOR_WINCEx
-    #define SHOW_FPS
-#endif
-//#define USE_GX_SCREEN
 
 class SkSurface;
 class SkOSMenu;
@@ -37,8 +32,14 @@ public:
     virtual ~SkWindow();
 
     struct AttachmentInfo {
+        AttachmentInfo()
+            : fSampleCount(0)
+            , fStencilBits(0)
+            , fColorBits(0) {}
+
         int fSampleCount;
         int fStencilBits;
+        int fColorBits;
     };
 
     SkSurfaceProps getSurfaceProps() const { return fSurfaceProps; }
@@ -46,10 +47,12 @@ public:
         fSurfaceProps = props;
     }
 
+    SkImageInfo info() const { return fBitmap.info(); }
     const SkBitmap& getBitmap() const { return fBitmap; }
 
-    void    setColorType(SkColorType);
-    void    resize(int width, int height, SkColorType = kUnknown_SkColorType);
+    void    resize(int width, int height);
+    void    resize(const SkImageInfo&);
+    void    setColorType(SkColorType, SkColorProfileType);
 
     bool    isDirty() const { return !fDirtyRgn.isEmpty(); }
     bool    update(SkIRect* updateArea);
@@ -77,8 +80,6 @@ public:
 
     virtual SkSurface* createSurface();
 
-    virtual void onPDFSaved(const char title[], const char desc[],
-        const char path[]) {}
 protected:
     virtual bool onEvent(const SkEvent&);
     virtual bool onDispatchClick(int x, int y, Click::State, void* owner, unsigned modi);
@@ -103,7 +104,6 @@ protected:
 
 private:
     SkSurfaceProps  fSurfaceProps;
-    SkColorType fColorType;
     SkBitmap    fBitmap;
     SkRegion    fDirtyRgn;
 
@@ -122,16 +122,16 @@ private:
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(SK_BUILD_FOR_MAC)
+#if defined(SK_USE_SDL)
+    #include "SkOSWindow_SDL.h"
+#elif defined(SK_BUILD_FOR_MAC)
     #include "SkOSWindow_Mac.h"
 #elif defined(SK_BUILD_FOR_WIN)
     #include "SkOSWindow_Win.h"
 #elif defined(SK_BUILD_FOR_ANDROID)
     #include "SkOSWindow_Android.h"
 #elif defined(SK_BUILD_FOR_UNIX)
-  #include "SkOSWindow_Unix.h"
-#elif defined(SK_BUILD_FOR_SDL)
-    #include "SkOSWindow_SDL.h"
+    #include "SkOSWindow_Unix.h"
 #elif defined(SK_BUILD_FOR_IOS)
     #include "SkOSWindow_iOS.h"
 #endif

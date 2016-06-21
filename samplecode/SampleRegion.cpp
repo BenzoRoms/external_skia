@@ -1,10 +1,10 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+
 #include "SampleCode.h"
 #include "SkView.h"
 #include "SkCanvas.h"
@@ -13,7 +13,8 @@
 #include "SkRegion.h"
 #include "SkShader.h"
 #include "SkUtils.h"
-#include "SkImageDecoder.h"
+
+#include <math.h>
 
 static void test_strokerect(SkCanvas* canvas) {
     int width = 100;
@@ -42,12 +43,12 @@ static void test_strokerect(SkCanvas* canvas) {
     // use the rect
     c.clear(SK_ColorTRANSPARENT);
     c.drawRect(r, paint);
-    canvas->drawBitmap(bitmap, 0, 0, NULL);
+    canvas->drawBitmap(bitmap, 0, 0, nullptr);
 
     // use the path
     c.clear(SK_ColorTRANSPARENT);
     c.drawPath(path, paint);
-    canvas->drawBitmap(bitmap, SkIntToScalar(2*width), 0, NULL);
+    canvas->drawBitmap(bitmap, SkIntToScalar(2*width), 0, nullptr);
 }
 
 static void drawFadingText(SkCanvas* canvas,
@@ -64,7 +65,7 @@ static void drawFadingText(SkCanvas* canvas,
     // antialiasing
     bounds.inset(-SkIntToScalar(2), -SkIntToScalar(2));
 
-    canvas->saveLayer(&bounds, NULL);
+    canvas->saveLayer(&bounds, nullptr);
     canvas->drawText(text, len, x, y, paint);
 
     const SkPoint pts[] = {
@@ -77,10 +78,8 @@ static void drawFadingText(SkCanvas* canvas,
     // of our pts[] array.
     const SkScalar pos[] = { 0, 0.9f, SK_Scalar1 };
 
-    SkShader* s = SkGradientShader::CreateLinear(pts, colors, pos, 3,
-                                                 SkShader::kClamp_TileMode);
     SkPaint p;
-    p.setShader(s)->unref();
+    p.setShader(SkGradientShader::MakeLinear(pts, colors, pos, 3, SkShader::kClamp_TileMode));
     p.setXfermodeMode(SkXfermode::kDstIn_Mode);
     canvas->drawRect(bounds, p);
 
@@ -104,21 +103,15 @@ static void test_text(SkCanvas* canvas) {
     const SkPoint pts[] = { { x, y }, { x + paint.measureText(str, len), y } };
     const SkColor colors[] = { SK_ColorBLACK, SK_ColorBLACK, 0 };
     const SkScalar pos[] = { 0, 0.9f, 1 };
-    SkShader* s = SkGradientShader::CreateLinear(pts, colors, pos,
+    paint.setShader(SkGradientShader::MakeLinear(pts, colors, pos,
                                                  SK_ARRAY_COUNT(colors),
-                                                 SkShader::kClamp_TileMode);
-    paint.setShader(s)->unref();
+                                                 SkShader::kClamp_TileMode));
     canvas->drawText(str, len, x, y, paint);
 
     y += 20;
-    paint.setShader(NULL);
+    paint.setShader(nullptr);
     drawFadingText(canvas, str, len, x, y, paint);
 }
-
-#ifdef SK_BUILD_FOR_WIN
-// windows doesn't have roundf
-inline float roundf(float x) { return (x-floor(x))>0.5 ? ceil(x) : floor(x); }
-#endif
 
 #ifdef SK_DEBUG
 static void make_rgn(SkRegion* rgn, int left, int top, int right, int bottom,
@@ -273,7 +266,7 @@ protected:
 
             {
                 char    buffer[1000];
-                SkDEBUGCODE(size_t  size = ) tmp.writeToMemory(NULL);
+                SkDEBUGCODE(size_t  size = ) tmp.writeToMemory(nullptr);
                 SkASSERT(size <= sizeof(buffer));
                 SkDEBUGCODE(size_t  size2 = ) tmp.writeToMemory(buffer);
                 SkASSERT(size == size2);
@@ -396,13 +389,13 @@ protected:
     virtual SkView::Click* onFindClickHandler(SkScalar x, SkScalar y,
                                               unsigned modi) override {
         return fRect.contains(SkScalarRoundToInt(x),
-                              SkScalarRoundToInt(y)) ? new Click(this) : NULL;
+                              SkScalarRoundToInt(y)) ? new Click(this) : nullptr;
     }
 
     bool onClick(Click* click) override {
         fRect.offset(click->fICurr.fX - click->fIPrev.fX,
                      click->fICurr.fY - click->fIPrev.fY);
-        this->inval(NULL);
+        this->inval(nullptr);
         return true;
     }
 

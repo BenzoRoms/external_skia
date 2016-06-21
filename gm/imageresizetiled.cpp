@@ -14,30 +14,13 @@
 
 #define RESIZE_FACTOR SkIntToScalar(2)
 
-namespace skiagm {
-
-class ImageResizeTiledGM : public GM {
-public:
-    ImageResizeTiledGM() {
-    }
-
-protected:
-
-    SkString onShortName() override {
-        return SkString("imageresizetiled");
-    }
-
-    SkISize onISize() override {
-        return SkISize::Make(WIDTH, HEIGHT);
-    }
-
-    void onDraw(SkCanvas* canvas) override {
+DEF_SIMPLE_GM(imageresizetiled, canvas, WIDTH, HEIGHT) {
         SkPaint paint;
         SkMatrix matrix;
         matrix.setScale(RESIZE_FACTOR, RESIZE_FACTOR);
-        SkAutoTUnref<SkImageFilter> imageFilter(
-            SkImageFilter::CreateMatrixFilter(matrix, kNone_SkFilterQuality));
-        paint.setImageFilter(imageFilter.get());
+        paint.setImageFilter(SkImageFilter::MakeMatrixFilter(matrix,
+                                                             kNone_SkFilterQuality,
+                                                             nullptr));
         const SkScalar tile_size = SkIntToScalar(100);
         SkRect bounds;
         canvas->getClipBounds(&bounds);
@@ -47,7 +30,7 @@ protected:
                 canvas->clipRect(SkRect::MakeXYWH(x, y, tile_size, tile_size));
                 canvas->scale(SkScalarInvert(RESIZE_FACTOR),
                               SkScalarInvert(RESIZE_FACTOR));
-                canvas->saveLayer(NULL, &paint);
+                canvas->saveLayer(nullptr, &paint);
                 const char* str[] = {
                     "The quick",
                     "brown fox",
@@ -68,14 +51,4 @@ protected:
                 canvas->restore();
             }
         }
-    }
-
-private:
-    typedef GM INHERITED;
-};
-
-//////////////////////////////////////////////////////////////////////////////
-
-DEF_GM(return new ImageResizeTiledGM(); )
-
 }

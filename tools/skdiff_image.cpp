@@ -8,7 +8,6 @@
 #include "skdiff_utils.h"
 #include "SkBitmap.h"
 #include "SkData.h"
-#include "SkImageDecoder.h"
 #include "SkImageEncoder.h"
 #include "SkOSFile.h"
 #include "SkTDArray.h"
@@ -44,11 +43,11 @@ static void create_diff_images (DiffMetricProc dmp,
     if (comparisonFileBits) {
         drp->fComparison.fStatus = DiffResource::kRead_Status;
     }
-    if (NULL == baseFileBits || NULL == comparisonFileBits) {
-        if (NULL == baseFileBits) {
+    if (nullptr == baseFileBits || nullptr == comparisonFileBits) {
+        if (nullptr == baseFileBits) {
             drp->fBase.fStatus = DiffResource::kCouldNotRead_Status;
         }
-        if (NULL == comparisonFileBits) {
+        if (nullptr == comparisonFileBits) {
             drp->fComparison.fStatus = DiffResource::kCouldNotRead_Status;
         }
         drp->fResult = DiffRecord::kCouldNotCompare_Result;
@@ -60,8 +59,8 @@ static void create_diff_images (DiffMetricProc dmp,
         return;
     }
 
-    get_bitmap(baseFileBits, drp->fBase, SkImageDecoder::kDecodePixels_Mode);
-    get_bitmap(comparisonFileBits, drp->fComparison, SkImageDecoder::kDecodePixels_Mode);
+    get_bitmap(baseFileBits, drp->fBase, false);
+    get_bitmap(comparisonFileBits, drp->fComparison, false);
     if (DiffResource::kDecoded_Status != drp->fBase.fStatus ||
         DiffResource::kDecoded_Status != drp->fComparison.fStatus)
     {
@@ -314,7 +313,7 @@ int tool_main(int argc, char** argv) {
     } else {
         const char* baseLabelCstr = baseLabel.c_str();
         const char* tab = strchr(baseLabelCstr, '\t');
-        if (NULL == tab) {
+        if (nullptr == tab) {
             outputFile = baseLabel;
         } else {
             outputFile.set(baseLabelCstr, tab - baseLabelCstr);

@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -7,9 +6,11 @@
  */
 
 #include "GrGpuResource.h"
+#include "GrContext.h"
 #include "GrResourceCache.h"
 #include "GrGpu.h"
 #include "GrGpuResourcePriv.h"
+#include "SkTraceMemoryDump.h"
 
 static inline GrResourceCache* get_resource_cache(GrGpu* gpu) {
     SkASSERT(gpu);
@@ -18,15 +19,26 @@ static inline GrResourceCache* get_resource_cache(GrGpu* gpu) {
     return gpu->getContext()->getResourceCache();
 }
 
-GrGpuResource::GrGpuResource(GrGpu* gpu, LifeCycle lifeCycle)
+GrGpuResource::GrGpuResource(GrGpu* gpu)
     : fGpu(gpu)
     , fGpuMemorySize(kInvalidGpuMemorySize)
-    , fLifeCycle(lifeCycle)
+    , fBudgeted(SkBudgeted::kNo)
+    , fRefsWrappedObjects(false)
     , fUniqueID(CreateUniqueID()) {
     SkDEBUGCODE(fCacheArrayIndex = -1);
 }
 
-void GrGpuResource::registerWithCache() {
+void GrGpuResource::registerWithCache(SkBudgeted budgeted) {
+    SkASSERT(fBudgeted == SkBudgeted::kNo);
+    fBudgeted = budgeted;
+    this->computeScratchKey(&fScratchKey);
+    get_resource_cache(fGpu)->resourceAccess().insertResource(this);
+}
+
+void GrGpuResource::registerWithCacheWrapped() {
+    SkASSERT(fBudgeted == SkBudgeted::kNo);
+    // Currently resources referencing wrapped objects are not budgeted.
+    fRefsWrappedObjects = true;
     get_resource_cache(fGpu)->resourceAccess().insertResource(this);
 }
 
@@ -35,20 +47,40 @@ GrGpuResource::~GrGpuResource() {
     SkASSERT(this->wasDestroyed());
 }
 
-void GrGpuResource::release() { 
+void GrGpuResource::release() {
     SkASSERT(fGpu);
     this->onRelease();
     get_resource_cache(fGpu)->resourceAccess().removeResource(this);
-    fGpu = NULL;
+    fGpu = nullptr;
     fGpuMemorySize = 0;
 }
 
 void GrGpuResource::abandon() {
+    if (this->wasDestroyed()) {
+        return;
+    }
     SkASSERT(fGpu);
     this->onAbandon();
     get_resource_cache(fGpu)->resourceAccess().removeResource(this);
-    fGpu = NULL;
+    fGpu = nullptr;
     fGpuMemorySize = 0;
+}
+
+void GrGpuResource::dumpMemoryStatistics(SkTraceMemoryDump* traceMemoryDump) const {
+    // Dump resource as "skia/gpu_resources/resource_#".
+    SkString dumpName("skia/gpu_resources/resource_");
+    dumpName.appendS32(this->getUniqueID());
+
+    traceMemoryDump->dumpNumericValue(dumpName.c_str(), "size", "bytes", this->gpuMemorySize());
+
+    if (this->isPurgeable()) {
+        traceMemoryDump->dumpNumericValue(dumpName.c_str(), "purgeable_size", "bytes",
+                                          this->gpuMemorySize());
+    }
+
+    // Call setMemoryBacking to allow sub-classes with implementation specific backings (such as GL
+    // objects) to provide additional information.
+    this->setMemoryBacking(traceMemoryDump, dumpName);
 }
 
 const SkData* GrGpuResource::setCustomData(const SkData* data) {
@@ -61,7 +93,7 @@ const GrContext* GrGpuResource::getContext() const {
     if (fGpu) {
         return fGpu->getContext();
     } else {
-        return NULL;
+        return nullptr;
     }
 }
 
@@ -69,7 +101,7 @@ GrContext* GrGpuResource::getContext() {
     if (fGpu) {
         return fGpu->getContext();
     } else {
-        return NULL;
+        return nullptr;
     }
 }
 
@@ -85,6 +117,9 @@ void GrGpuResource::didChangeGpuMemorySize() const {
 }
 
 void GrGpuResource::removeUniqueKey() {
+    if (this->wasDestroyed()) {
+        return;
+    }
     SkASSERT(fUniqueKey.isValid());
     get_resource_cache(fGpu)->resourceAccess().removeUniqueKey(this);
 }
@@ -94,7 +129,7 @@ void GrGpuResource::setUniqueKey(const GrUniqueKey& key) {
     SkASSERT(key.isValid());
 
     // Wrapped and uncached resources can never have a unique key.
-    if (!this->resourcePriv().isBudgeted()) {
+    if (SkBudgeted::kNo == this->resourcePriv().isBudgeted()) {
         return;
     }
 
@@ -108,7 +143,7 @@ void GrGpuResource::setUniqueKey(const GrUniqueKey& key) {
 void GrGpuResource::notifyAllCntsAreZero(CntType lastCntTypeToReachZero) const {
     if (this->wasDestroyed()) {
         // We've already been removed from the cache. Goodbye cruel world!
-        SkDELETE(this);
+        delete this;
         return;
     }
 
@@ -140,16 +175,6 @@ bool GrGpuResource::notifyRefCountIsZero() const {
     return false;
 }
 
-void GrGpuResource::setScratchKey(const GrScratchKey& scratchKey) {
-    SkASSERT(!fScratchKey.isValid());
-    SkASSERT(scratchKey.isValid());
-    // Wrapped resources can never have a scratch key.
-    if (this->isWrapped()) {
-        return;
-    }
-    fScratchKey = scratchKey;
-}
-
 void GrGpuResource::removeScratchKey() {
     if (!this->wasDestroyed() && fScratchKey.isValid()) {
         get_resource_cache(fGpu)->resourceAccess().willRemoveScratchKey(this);
@@ -158,15 +183,18 @@ void GrGpuResource::removeScratchKey() {
 }
 
 void GrGpuResource::makeBudgeted() {
-    if (GrGpuResource::kUncached_LifeCycle == fLifeCycle) {
-        fLifeCycle = kCached_LifeCycle;
+    if (!this->wasDestroyed() && SkBudgeted::kNo == fBudgeted) {
+        // Currently resources referencing wrapped objects are not budgeted.
+        SkASSERT(!fRefsWrappedObjects);
+        fBudgeted = SkBudgeted::kYes;
         get_resource_cache(fGpu)->resourceAccess().didChangeBudgetStatus(this);
     }
 }
 
 void GrGpuResource::makeUnbudgeted() {
-    if (GrGpuResource::kCached_LifeCycle == fLifeCycle && !fUniqueKey.isValid()) {
-        fLifeCycle = kUncached_LifeCycle;
+    if (!this->wasDestroyed() && SkBudgeted::kYes == fBudgeted &&
+        !fUniqueKey.isValid()) {
+        fBudgeted = SkBudgeted::kNo;
         get_resource_cache(fGpu)->resourceAccess().didChangeBudgetStatus(this);
     }
 }

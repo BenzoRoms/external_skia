@@ -50,9 +50,9 @@ class Drawer {
         canvas->clipRect(clipRect);
         canvas->clear(0xff000000);
 
-        canvas->saveLayer(NULL, &blackPaint);
+        canvas->saveLayer(nullptr, &blackPaint);
             canvas->drawRect(canvasRect, greenPaint);
-            canvas->saveLayer(NULL, &layerPaint);
+            canvas->saveLayer(nullptr, &layerPaint);
                 canvas->drawBitmapRect(fCircleBM, SkRect::MakeXYWH(20,20,60,60), &blackPaint);
             canvas->restore();
         canvas->restore();
@@ -114,7 +114,7 @@ class PictureStrategy : public RecordingStrategy {
                                                    SkIntToScalar(fHeight),
                                                    &factory);
         drawer.draw(canvas, canvasRect, mode);
-        SkAutoTUnref<SkPicture> picture(recorder.endRecording());
+        sk_sp<SkPicture> picture(recorder.finishRecordingAsPicture());
 
         SkCanvas replayCanvas(fBitmap);
         replayCanvas.clear(0xffffffff);

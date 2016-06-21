@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -25,7 +24,7 @@ static SkBitmap make_bitmap() {
 
     bm.allocPixels(SkImageInfo::Make(256, 256, kIndex_8_SkColorType,
                                      kPremul_SkAlphaType),
-                   NULL, ctable);
+                   nullptr, ctable);
     ctable->unref();
 
     bm.lockPixels();
@@ -99,28 +98,26 @@ protected:
             paint.setColor(SK_ColorBLUE);
             for (size_t i = 0; i < SK_ARRAY_COUNT(gRecs); i++) {
                 if (gRecs[i].fStyle != NONE) {
-                    SkMaskFilter* mf = SkBlurMaskFilter::Create(gRecs[i].fStyle,
+                    paint.setMaskFilter(SkBlurMaskFilter::Make(gRecs[i].fStyle,
                                       SkBlurMask::ConvertRadiusToSigma(SkIntToScalar(20)),
-                                      flags);
-                    paint.setMaskFilter(mf)->unref();
+                                      flags));
                 } else {
-                    paint.setMaskFilter(NULL);
+                    paint.setMaskFilter(nullptr);
                 }
                 canvas->drawCircle(200 + gRecs[i].fCx*100.f,
                                    200 + gRecs[i].fCy*100.f, 50, paint);
             }
             // draw text
             {
-                SkMaskFilter* mf = SkBlurMaskFilter::Create(kNormal_SkBlurStyle,
-                                      SkBlurMask::ConvertRadiusToSigma(SkIntToScalar(4)),
-                                      flags);
-                paint.setMaskFilter(mf)->unref();
+                paint.setMaskFilter(SkBlurMaskFilter::Make(kNormal_SkBlurStyle,
+                                                           SkBlurMask::ConvertRadiusToSigma(4),
+                                                           flags));
                 SkScalar x = SkIntToScalar(70);
                 SkScalar y = SkIntToScalar(400);
                 paint.setColor(SK_ColorBLACK);
                 canvas->drawText("Hamburgefons Style", 18, x, y, paint);
                 canvas->drawText("Hamburgefons Style", 18, x, y + SkIntToScalar(50), paint);
-                paint.setMaskFilter(NULL);
+                paint.setMaskFilter(nullptr);
                 paint.setColor(SK_ColorWHITE);
                 x -= SkIntToScalar(2);
                 y -= SkIntToScalar(2);

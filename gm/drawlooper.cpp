@@ -18,12 +18,8 @@
 
 class DrawLooperGM : public skiagm::GM {
 public:
-    DrawLooperGM() : fLooper(NULL) {
-        this->setBGColor(0xFFDDDDDD);
-    }
-
-    virtual ~DrawLooperGM() {
-        SkSafeUnref(fLooper);
+    DrawLooperGM() : fLooper(nullptr) {
+        this->setBGColor(sk_tool_utils::color_to_565(0xFFDDDDDD));
     }
 
 protected:
@@ -55,7 +51,7 @@ protected:
     }
 
 private:
-    SkLayerDrawLooper*   fLooper;
+    sk_sp<SkDrawLooper> fLooper;
 
     void init() {
         if (fLooper) return;
@@ -86,12 +82,11 @@ private:
             paint->setStyle(gParams[i].fStyle);
             paint->setStrokeWidth(gParams[i].fWidth);
             if (gParams[i].fBlur > 0) {
-                SkMaskFilter* mf = SkBlurMaskFilter::Create(kNormal_SkBlurStyle,
-                                         SkBlurMask::ConvertRadiusToSigma(gParams[i].fBlur));
-                paint->setMaskFilter(mf)->unref();
+                paint->setMaskFilter(SkBlurMaskFilter::Make(kNormal_SkBlurStyle,
+                                         SkBlurMask::ConvertRadiusToSigma(gParams[i].fBlur)));
             }
         }
-        fLooper = looperBuilder.detachLooper();
+        fLooper = looperBuilder.detach();
     }
 
     typedef GM INHERITED;
@@ -99,5 +94,4 @@ private:
 
 //////////////////////////////////////////////////////////////////////////////
 
-static skiagm::GM* MyFactory(void*) { return new DrawLooperGM; }
-static skiagm::GMRegistry reg(MyFactory);
+DEF_GM( return new DrawLooperGM; )

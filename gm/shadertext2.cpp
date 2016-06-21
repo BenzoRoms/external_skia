@@ -7,8 +7,7 @@
 #include "gm.h"
 #include "SkCanvas.h"
 #include "SkGradientShader.h"
-
-namespace skiagm {
+#include "SkPath.h"
 
 static void makebm(SkBitmap* bm, int w, int h) {
     bm->allocN32Pixels(w, h);
@@ -25,11 +24,11 @@ static void makebm(SkBitmap* bm, int w, int h) {
 
     SkPaint     paint;
 
-    paint.setShader(SkGradientShader::CreateLinear(kPts0, kColors0, kPos,
-                    SK_ARRAY_COUNT(kColors0), SkShader::kClamp_TileMode))->unref();
+    paint.setShader(SkGradientShader::MakeLinear(kPts0, kColors0, kPos,
+                    SK_ARRAY_COUNT(kColors0), SkShader::kClamp_TileMode));
     canvas.drawPaint(paint);
-    paint.setShader(SkGradientShader::CreateLinear(kPts1, kColors1, kPos,
-                    SK_ARRAY_COUNT(kColors1), SkShader::kClamp_TileMode))->unref();
+    paint.setShader(SkGradientShader::MakeLinear(kPts1, kColors1, kPos,
+                    SK_ARRAY_COUNT(kColors1), SkShader::kClamp_TileMode));
     canvas.drawPaint(paint);
 }
 
@@ -40,21 +39,8 @@ struct LabeledMatrix {
     const char* fLabel;
 };
 
-class ShaderText2GM : public GM {
-public:
-    ShaderText2GM() {
-        this->setBGColor(0xFFDDDDDD);
-    }
-
-protected:
-
-    SkString onShortName() override {
-        return SkString("shadertext2");
-    }
-
-    SkISize onISize() override { return SkISize::Make(1800, 900); }
-
-    void onDraw(SkCanvas* canvas) override {
+DEF_SIMPLE_GM_BG(shadertext2, canvas, 1800, 900,
+                 sk_tool_utils::color_to_565(0xFFDDDDDD)) {
         static const char kText[] = "SKIA";
         static const int kTextLen = SK_ARRAY_COUNT(kText) - 1;
         static const int kPointSize = 55;
@@ -150,11 +136,9 @@ protected:
                 canvas->translate(0, kPadY / 2 + kPointSize);
                 columnH += kPadY / 2 + kPointSize;
                 for (int lm = 0; lm < localMatrices.count(); ++lm) {
-                    paint.setShader(
-                            SkShader::CreateBitmapShader(bmp,
-                                                         SkShader::kMirror_TileMode,
-                                                         SkShader::kRepeat_TileMode,
-                                                         &localMatrices[lm].fMatrix))->unref();
+                    paint.setShader(SkShader::MakeBitmapShader(bmp, SkShader::kMirror_TileMode,
+                                                               SkShader::kRepeat_TileMode,
+                                                               &localMatrices[lm].fMatrix));
 
                     canvas->save();
                         canvas->concat(matrices[m].fMatrix);
@@ -174,8 +158,8 @@ protected:
 
                     canvas->save();
                         canvas->concat(matrices[m].fMatrix);
-                        canvas->drawTextOnPath(kText, kTextLen, path, NULL, paint);
-                        canvas->drawTextOnPath(kText, kTextLen, path, NULL, outlinePaint);
+                        canvas->drawTextOnPath(kText, kTextLen, path, nullptr, paint);
+                        canvas->drawTextOnPath(kText, kTextLen, path, nullptr, outlinePaint);
                     canvas->restore();
                     SkPaint stroke;
                     stroke.setStyle(SkPaint::kStroke_Style);
@@ -197,14 +181,4 @@ protected:
                 canvas->drawText(kStrokeLabel, strlen(kStrokeLabel), strokeX, y, labelPaint);
             }
         }
-    }
-
-private:
-    typedef GM INHERITED;
-};
-
-///////////////////////////////////////////////////////////////////////////////
-
-static GM* MyFactory(void*) { return new ShaderText2GM; }
-static GMRegistry reg(MyFactory);
 }

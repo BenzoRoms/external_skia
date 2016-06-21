@@ -1,11 +1,12 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+
 #include "gm.h"
+#include "SkPath.h"
 
 typedef SkScalar (*MakePathProc)(SkPath*);
 
@@ -197,7 +198,7 @@ protected:
                 canvas->save();
                 canvas->clipRect(clipR);
 
-                const SkRect* clipPtr = doclip ? &clipR : NULL;
+                const SkRect* clipPtr = doclip ? &clipR : nullptr;
 
                 show(canvas, path, paint, clipPtr, clipR.fTop, clipR.centerY());
                 show(canvas, path, paint, clipPtr, clipR.centerY(), clipR.fBottom);
@@ -212,10 +213,29 @@ private:
     typedef skiagm::GM INHERITED;
 };
 
+DEF_SIMPLE_GM(rotatedcubicpath, canvas, 200, 200) {
+    SkPaint p;
+    p.setAntiAlias(true);
+    p.setStyle(SkPaint::kFill_Style);
+
+    canvas->translate(50, 50);
+    SkPath path;
+    path.moveTo(48,-23);
+    path.cubicTo(48,-29.5, 6,-30, 6,-30);
+    path.cubicTo(6,-30, 2,0, 2,0);
+    path.cubicTo(2,0, 44,-21.5, 48,-23);
+    path.close();
+
+    p.setColor(SK_ColorBLUE);
+    canvas->drawPath(path, p);
+
+    // Rotated path, which is not antialiased on GPU
+    p.setColor(SK_ColorRED);
+    canvas->rotate(90);
+    canvas->drawPath(path, p);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
-static skiagm::GM* MyFactory(void*) { return new PathFillGM; }
-static skiagm::GMRegistry reg(MyFactory);
-
-static skiagm::GM* F1(void*) { return new PathInverseFillGM; }
-static skiagm::GMRegistry gR1(F1);
+DEF_GM( return new PathFillGM; )
+DEF_GM( return new PathInverseFillGM; )

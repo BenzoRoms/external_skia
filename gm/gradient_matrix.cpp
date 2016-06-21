@@ -61,22 +61,22 @@ static const SkScalar TESTGRID_Y = SkIntToScalar(200);
 
 static const int IMAGES_X = 4;             // number of images per row
 
-static SkShader* make_linear_gradient(const SkPoint pts[2], const SkMatrix& localMatrix) {
-    return SkGradientShader::CreateLinear(pts, gColors, NULL, SK_ARRAY_COUNT(gColors),
-                                          SkShader::kClamp_TileMode, 0, &localMatrix);
+static sk_sp<SkShader> make_linear_gradient(const SkPoint pts[2], const SkMatrix& localMatrix) {
+    return SkGradientShader::MakeLinear(pts, gColors, nullptr, SK_ARRAY_COUNT(gColors),
+                                        SkShader::kClamp_TileMode, 0, &localMatrix);
 }
 
-static SkShader* make_radial_gradient(const SkPoint pts[2], const SkMatrix& localMatrix) {
+static sk_sp<SkShader> make_radial_gradient(const SkPoint pts[2], const SkMatrix& localMatrix) {
     SkPoint center;
     center.set(SkScalarAve(pts[0].fX, pts[1].fX),
                SkScalarAve(pts[0].fY, pts[1].fY));
     float radius = (center - pts[0]).length();
-    return SkGradientShader::CreateRadial(center, radius, gColors, NULL, SK_ARRAY_COUNT(gColors),
-                                          SkShader::kClamp_TileMode, 0, &localMatrix);
+    return SkGradientShader::MakeRadial(center, radius, gColors, nullptr, SK_ARRAY_COUNT(gColors),
+                                        SkShader::kClamp_TileMode, 0, &localMatrix);
 }
 
 static void draw_gradients(SkCanvas* canvas,
-                           SkShader* (*makeShader)(const SkPoint[2], const SkMatrix&),
+                           sk_sp<SkShader> (*makeShader)(const SkPoint[2], const SkMatrix&),
                            const SkPoint ptsArray[][2], int numImages) {
     // Use some nice prime numbers for the rectangle and matrix with
     // different scaling along the x and y axes (which is the bug this
@@ -97,11 +97,8 @@ static void draw_gradients(SkCanvas* canvas,
             canvas->save();
         }
 
-        // Setup shader and draw.
-        SkAutoTUnref<SkShader> shader(makeShader(*ptsArray, shaderMat));
-
         SkPaint paint;
-        paint.setShader(shader);
+        paint.setShader(makeShader(*ptsArray, shaderMat));
         canvas->drawRect(rectGrad, paint);
 
         // Advance to next position.
@@ -111,25 +108,8 @@ static void draw_gradients(SkCanvas* canvas,
     canvas->restore();
 }
 
-namespace skiagm {
-
-class GradientMatrixGM : public GM {
-public:
-    GradientMatrixGM() {
-        this->setBGColor(0xFFDDDDDD);
-    }
-
-protected:
-
-    SkString onShortName() override {
-        return SkString("gradient_matrix");
-    }
-
-    SkISize onISize() override {
-        return SkISize::Make(800, 800);
-    }
-
-    void onDraw(SkCanvas* canvas) override {
+DEF_SIMPLE_GM_BG(gradient_matrix, canvas, 800, 800,
+                 sk_tool_utils::color_to_565(0xFFDDDDDD)) {
         draw_gradients(canvas, &make_linear_gradient,
                       linearPts, SK_ARRAY_COUNT(linearPts));
 
@@ -137,11 +117,4 @@ protected:
 
         draw_gradients(canvas, &make_radial_gradient,
                       radialPts, SK_ARRAY_COUNT(radialPts));
-    }
-
-private:
-    typedef GM INHERITED;
-};
-
-DEF_GM( return new GradientMatrixGM; )
 }

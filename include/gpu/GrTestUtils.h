@@ -13,9 +13,12 @@
 #ifdef GR_TEST_UTILS
 
 #include "GrColor.h"
+#include "SkPathEffect.h"
 #include "SkRandom.h"
 #include "SkStrokeRec.h"
+#include "../private/SkTemplates.h"
 
+class GrStyle;
 class SkMatrix;
 class SkPath;
 class SkRRect;
@@ -23,7 +26,7 @@ struct SkRect;
 
 namespace GrTest {
 /**
- * A helper for use in Test functions.
+ * Helpers for use in Test functions.
  */
 const SkMatrix& TestMatrix(SkRandom*);
 const SkMatrix& TestMatrixPreservesRightAngles(SkRandom*);
@@ -35,8 +38,34 @@ const SkRRect& TestRRectSimple(SkRandom*);
 const SkPath& TestPath(SkRandom*);
 const SkPath& TestPathConvex(SkRandom*);
 SkStrokeRec TestStrokeRec(SkRandom*);
+/** Creates styles with dash path effects and null path effects */
+void TestStyle(SkRandom*, GrStyle*);
 
-}
+// We have a simplified dash path effect here to avoid relying on SkDashPathEffect which
+// is in the optional build target effects.
+class TestDashPathEffect : public SkPathEffect {
+public:
+    static sk_sp<SkPathEffect> Make(const SkScalar* intervals, int count, SkScalar phase) {
+        return sk_sp<SkPathEffect>(new TestDashPathEffect(intervals, count, phase));
+    }
+
+    bool filterPath(SkPath* dst, const SkPath&, SkStrokeRec* , const SkRect*) const override;
+    DashType asADash(DashInfo* info) const override;
+    Factory getFactory() const override { return nullptr; }
+    void toString(SkString*) const override {}
+
+private:
+    TestDashPathEffect(const SkScalar* intervals, int count, SkScalar phase);
+
+    int                     fCount;
+    SkAutoTArray<SkScalar>  fIntervals;
+    SkScalar                fPhase;
+    SkScalar                fInitialDashLength;
+    int                     fInitialDashIndex;
+    SkScalar                fIntervalLength;
+};
+
+}  // namespace GrTest
 
 static inline GrColor GrRandomColor(SkRandom* random) {
     // There are only a few cases of random colors which interest us
@@ -49,7 +78,7 @@ static inline GrColor GrRandomColor(SkRandom* random) {
     };
 
     ColorMode colorMode = ColorMode(random->nextULessThan(kLast_ColorMode + 1));
-    GrColor color;
+    GrColor color SK_INIT_TO_AVOID_WARNING;
     switch (colorMode) {
         case kAllOnes_ColorMode:
             color = GrColorPackRGBA(0xFF, 0xFF, 0xFF, 0xFF);
@@ -85,10 +114,11 @@ static inline uint8_t GrRandomCoverage(SkRandom* random) {
     };
 
     CoverageMode colorMode = CoverageMode(random->nextULessThan(kLast_CoverageMode + 1));
-    uint8_t coverage;
+    uint8_t coverage SK_INIT_TO_AVOID_WARNING;
     switch (colorMode) {
         case kZero_CoverageMode:
             coverage = 0;
+            break;
         case kAllOnes_CoverageMode:
             coverage = 0xff;
             break;

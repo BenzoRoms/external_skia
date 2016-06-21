@@ -42,7 +42,8 @@ static void testSimplify4x4RectsMain(PathOpsThreadState* data)
         SkPath path, out;
         char* str = pathStr;
         path.setFillType(SkPath::kWinding_FillType);
-        int l, t, r, b;
+        int l SK_INIT_TO_AVOID_WARNING, t SK_INIT_TO_AVOID_WARNING,
+            r SK_INIT_TO_AVOID_WARNING, b SK_INIT_TO_AVOID_WARNING;
         if (aShape) {
             switch (aShape) {
                 case 1:  // square
@@ -193,8 +194,8 @@ DEF_TEST(PathOpsSimplifyRectsThreaded, reporter) {
         for (int b = a ; b < 8; ++b) {
             for (int c = b ; c < 8; ++c) {
                 for (int d = c; d < 8; ++d) {
-                        *testRunner.fRunnables.append() = SkNEW_ARGS(PathOpsThreadedRunnable,
-                                (&testSimplify4x4RectsMain, a, b, c, d, &testRunner));
+                    *testRunner.fRunnables.append() = new PathOpsThreadedRunnable(
+                            &testSimplify4x4RectsMain, a, b, c, d, &testRunner);
                 }
                 if (!reporter->allowExtendedTest()) goto finish;
             }

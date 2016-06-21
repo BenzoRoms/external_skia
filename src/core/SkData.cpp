@@ -6,8 +6,8 @@
  */
 
 #include "SkData.h"
-#include "SkLazyPtr.h"
 #include "SkOSFile.h"
+#include "SkOnce.h"
 #include "SkReadBuffer.h"
 #include "SkStream.h"
 #include "SkWriteBuffer.h"
@@ -26,18 +26,18 @@ SkData::SkData(const void* ptr, size_t size, ReleaseProc proc, void* context) {
 SkData::SkData(size_t size) {
     fPtr = (char*)(this + 1);   // contents are immediately after this
     fSize = size;
-    fReleaseProc = NULL;
-    fReleaseProcContext = NULL;
+    fReleaseProc = nullptr;
+    fReleaseProcContext = nullptr;
 }
 
 SkData::~SkData() {
     if (fReleaseProc) {
-        fReleaseProc(fPtr, fSize, fReleaseProcContext);
+        fReleaseProc(fPtr, fReleaseProcContext);
     }
 }
 
 bool SkData::equals(const SkData* other) const {
-    if (NULL == other) {
+    if (nullptr == other) {
         return false;
     }
 
@@ -59,95 +59,102 @@ size_t SkData::copyRange(size_t offset, size_t length, void* buffer) const {
     return length;
 }
 
-SkData* SkData::PrivateNewWithCopy(const void* srcOrNull, size_t length) {
+sk_sp<SkData> SkData::PrivateNewWithCopy(const void* srcOrNull, size_t length) {
     if (0 == length) {
-        return SkData::NewEmpty();
+        return SkData::MakeEmpty();
     }
-    char* storage = (char*)sk_malloc_throw(sizeof(SkData) + length);
+
+    const size_t actualLength = length + sizeof(SkData);
+    if (actualLength < length) {
+        // we overflowed
+        sk_throw();
+    }
+
+    char* storage = (char*)sk_malloc_throw(actualLength);
     SkData* data = new (storage) SkData(length);
     if (srcOrNull) {
         memcpy(data->writable_data(), srcOrNull, length);
     }
-    return data;
+    return sk_sp<SkData>(data);
 }
+
+void SkData::DummyReleaseProc(const void*, void*) {}
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// As a template argument these must have external linkage.
-SkData* sk_new_empty_data() { return new SkData(NULL, 0, NULL, NULL); }
-namespace { void sk_unref_data(SkData* ptr) { return SkSafeUnref(ptr); } }
+sk_sp<SkData> SkData::MakeEmpty() {
+    static SkOnce once;
+    static SkData* empty;
 
-SK_DECLARE_STATIC_LAZY_PTR(SkData, empty, sk_new_empty_data, sk_unref_data);
-
-SkData* SkData::NewEmpty() {
-    return SkRef(empty.get());
+    once([]{ empty = new SkData(nullptr, 0, nullptr, nullptr); });
+    return sk_ref_sp(empty);
 }
 
 // assumes fPtr was allocated via sk_malloc
-static void sk_free_releaseproc(const void* ptr, size_t, void*) {
+static void sk_free_releaseproc(const void* ptr, void*) {
     sk_free((void*)ptr);
 }
 
-SkData* SkData::NewFromMalloc(const void* data, size_t length) {
-    return new SkData(data, length, sk_free_releaseproc, NULL);
+sk_sp<SkData> SkData::MakeFromMalloc(const void* data, size_t length) {
+    return sk_sp<SkData>(new SkData(data, length, sk_free_releaseproc, nullptr));
 }
 
-SkData* SkData::NewWithCopy(const void* src, size_t length) {
+sk_sp<SkData> SkData::MakeWithCopy(const void* src, size_t length) {
     SkASSERT(src);
     return PrivateNewWithCopy(src, length);
 }
 
-SkData* SkData::NewUninitialized(size_t length) {
-    return PrivateNewWithCopy(NULL, length);
+sk_sp<SkData> SkData::MakeUninitialized(size_t length) {
+    return PrivateNewWithCopy(nullptr, length);
 }
 
-SkData* SkData::NewWithProc(const void* data, size_t length,
-                            ReleaseProc proc, void* context) {
-    return new SkData(data, length, proc, context);
+sk_sp<SkData> SkData::MakeWithProc(const void* ptr, size_t length, ReleaseProc proc, void* ctx) {
+    return sk_sp<SkData>(new SkData(ptr, length, proc, ctx));
 }
 
 // assumes fPtr was allocated with sk_fmmap
-static void sk_mmap_releaseproc(const void* addr, size_t length, void*) {
+static void sk_mmap_releaseproc(const void* addr, void* ctx) {
+    size_t length = reinterpret_cast<size_t>(ctx);
     sk_fmunmap(addr, length);
 }
 
-SkData* SkData::NewFromFILE(SkFILE* f) {
+sk_sp<SkData> SkData::MakeFromFILE(FILE* f) {
     size_t size;
     void* addr = sk_fmmap(f, &size);
-    if (NULL == addr) {
-        return NULL;
+    if (nullptr == addr) {
+        return nullptr;
     }
 
-    return SkData::NewWithProc(addr, size, sk_mmap_releaseproc, NULL);
+    return SkData::MakeWithProc(addr, size, sk_mmap_releaseproc, reinterpret_cast<void*>(size));
 }
 
-SkData* SkData::NewFromFileName(const char path[]) {
-    SkFILE* f = path ? sk_fopen(path, kRead_SkFILE_Flag) : NULL;
-    if (NULL == f) {
-        return NULL;
+sk_sp<SkData> SkData::MakeFromFileName(const char path[]) {
+    FILE* f = path ? sk_fopen(path, kRead_SkFILE_Flag) : nullptr;
+    if (nullptr == f) {
+        return nullptr;
     }
-    SkData* data = NewFromFILE(f);
+    auto data = MakeFromFILE(f);
     sk_fclose(f);
     return data;
 }
 
-SkData* SkData::NewFromFD(int fd) {
+sk_sp<SkData> SkData::MakeFromFD(int fd) {
     size_t size;
     void* addr = sk_fdmmap(fd, &size);
-    if (NULL == addr) {
-        return NULL;
+    if (nullptr == addr) {
+        return nullptr;
     }
 
-    return SkData::NewWithProc(addr, size, sk_mmap_releaseproc, NULL);
+    return SkData::MakeWithProc(addr, size, sk_mmap_releaseproc, nullptr);
 }
 
 // assumes context is a SkData
-static void sk_dataref_releaseproc(const void*, size_t, void* context) {
+static void sk_dataref_releaseproc(const void*, void* context) {
     SkData* src = reinterpret_cast<SkData*>(context);
     src->unref();
 }
 
-SkData* SkData::NewSubset(const SkData* src, size_t offset, size_t length) {
+sk_sp<SkData> SkData::MakeSubset(const SkData* src, size_t offset, size_t length) {
     /*
         We could, if we wanted/need to, just make a deep copy of src's data,
         rather than referencing it. This would duplicate the storage (of the
@@ -156,7 +163,7 @@ SkData* SkData::NewSubset(const SkData* src, size_t offset, size_t length) {
 
     size_t available = src->size();
     if (offset >= available || 0 == length) {
-        return SkData::NewEmpty();
+        return SkData::MakeEmpty();
     }
     available -= offset;
     if (length > available) {
@@ -165,28 +172,27 @@ SkData* SkData::NewSubset(const SkData* src, size_t offset, size_t length) {
     SkASSERT(length > 0);
 
     src->ref(); // this will be balanced in sk_dataref_releaseproc
-    return new SkData(src->bytes() + offset, length, sk_dataref_releaseproc,
-                         const_cast<SkData*>(src));
+    return sk_sp<SkData>(new SkData(src->bytes() + offset, length, sk_dataref_releaseproc,
+                                    const_cast<SkData*>(src)));
 }
 
-SkData* SkData::NewWithCString(const char cstr[]) {
+sk_sp<SkData> SkData::MakeWithCString(const char cstr[]) {
     size_t size;
-    if (NULL == cstr) {
+    if (nullptr == cstr) {
         cstr = "";
         size = 1;
     } else {
         size = strlen(cstr) + 1;
     }
-    return NewWithCopy(cstr, size);
+    return MakeWithCopy(cstr, size);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-SkData* SkData::NewFromStream(SkStream* stream, size_t size) {
-    SkAutoDataUnref data(SkData::NewUninitialized(size));
+sk_sp<SkData> SkData::MakeFromStream(SkStream* stream, size_t size) {
+    sk_sp<SkData> data(SkData::MakeUninitialized(size));
     if (stream->read(data->writable_data(), size) != size) {
-        return NULL;
+        return nullptr;
     }
-    return data.detach();
+    return data;
 }
-

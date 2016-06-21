@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2013 Google Inc.
  *
@@ -53,8 +52,7 @@ public:
 
         create_gradient(&bm);
 
-        SkShader* s = SkShader::CreateBitmapShader(bm, xTile, yTile);
-        fPaint.setShader(s)->unref();
+        fPaint.setShader(SkShader::MakeBitmapShader(bm, xTile, yTile));
 
         fName.printf("constXTile_");
 
@@ -80,7 +78,7 @@ protected:
         return fName.c_str();
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) {
+    virtual void onDraw(int loops, SkCanvas* canvas) {
         SkPaint paint(fPaint);
         this->setupPaint(&paint);
         paint.setFilterQuality(fDoFilter ? kLow_SkFilterQuality

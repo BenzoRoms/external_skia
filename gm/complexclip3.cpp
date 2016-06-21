@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2014 Google Inc.
  *
@@ -17,7 +16,7 @@ class ComplexClip3GM : public GM {
 public:
     ComplexClip3GM(bool doSimpleClipFirst)
         : fDoSimpleClipFirst(doSimpleClipFirst) {
-        this->setBGColor(0xFFDDDDDD);
+        this->setBGColor(sk_tool_utils::color_to_565(0xFFDDDDDD));
     }
 
 protected:
@@ -26,7 +25,7 @@ protected:
         SkString str;
         str.printf("complexclip3_%s", fDoSimpleClipFirst ? "simple" : "complex");
         return str;
-    }    
+    }
 
     SkISize onISize() { return SkISize::Make(1000, 950); }
 

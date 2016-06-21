@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2014 Google Inc.
  *
@@ -27,21 +26,16 @@ private:
      */
     bool isScratch() const {
         return !fResource->getUniqueKey().isValid() && fResource->fScratchKey.isValid() &&
-                fResource->resourcePriv().isBudgeted();
+                SkBudgeted::kYes == fResource->resourcePriv().isBudgeted();
     }
 
-    /**
-     * Is the resource object wrapping an externally allocated GPU resource?
-     */
-    bool isWrapped() const { return GrGpuResource::kWrapped_LifeCycle == fResource->fLifeCycle; }
- 
     /**
      * Called by the cache to delete the resource under normal circumstances.
      */
     void release() {
         fResource->release();
-        if (fResource->isPurgeable()) {            
-            SkDELETE(fResource);
+        if (fResource->isPurgeable()) {
+            delete fResource;
         }
     }
 
@@ -50,8 +44,8 @@ private:
      */
     void abandon() {
         fResource->abandon();
-        if (fResource->isPurgeable()) {            
-            SkDELETE(fResource);
+        if (fResource->isPurgeable()) {
+            delete fResource;
         }
     }
 

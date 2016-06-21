@@ -9,7 +9,6 @@
 #include "SkBitmap.h"
 #include "SkCanvas.h"
 #include "SkClipStack.h"
-#include "SkDevice.h"
 #include "SkPath.h"
 #include "SkPathOps.h"
 #include "SkPicture.h"
@@ -34,7 +33,7 @@ protected:
 
     void onDraw(SkCanvas* canvas) override {
         SkPictureRecorder recorder;
-        SkCanvas* rec = recorder.beginRecording(1200, 900, NULL, 0);
+        SkCanvas* rec = recorder.beginRecording(1200, 900, nullptr, 0);
         SkPath p;
         SkRect r = {
             SkIntToScalar(100),
@@ -47,7 +46,7 @@ protected:
         rec->translate(SkIntToScalar(250), SkIntToScalar(250));
         rec->clipPath(p, SkRegion::kIntersect_Op, true);
         rec->drawColor(0xffff0000);
-        SkAutoTUnref<SkPicture> pict(recorder.endRecording());
+        sk_sp<SkPicture> pict(recorder.finishRecordingAsPicture());
 
         canvas->setAllowSimplifyClip(true);
         canvas->save();

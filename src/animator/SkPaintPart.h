@@ -51,7 +51,7 @@ class SkDrawShader : public SkPaintPart {
     virtual SkShader* getShader();
 protected:
     bool add() override;
-    SkMatrix* getMatrix(); // returns NULL if matrix is NULL
+    SkMatrix* getMatrix(); // returns nullptr if matrix is nullptr
     SkDrawMatrix* matrix;
     int /*SkShader::TileMode*/ tileMode;
 };
@@ -62,8 +62,7 @@ class SkDrawTypeface  : public SkPaintPart {
 #ifdef SK_DUMP_ENABLED
     void dump(SkAnimateMaker *) override;
 #endif
-    SkTypeface* getTypeface() {
-        return SkTypeface::CreateFromName(fontName.c_str(), style); }
+    sk_sp<SkTypeface> getTypeface() { return SkTypeface::MakeFromName(fontName.c_str(), style); }
 protected:
     bool add() override;
     SkString fontName;

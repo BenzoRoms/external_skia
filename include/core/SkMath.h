@@ -53,13 +53,6 @@ static inline int32_t SkMulDiv(int32_t numer1, int32_t numer2, int32_t denom) {
 }
 
 /**
- *  Computes (numer1 << shift) / denom in full 64 intermediate precision.
- *  It is an error for denom to be 0. There is no special handling if
- *  the result overflows 32bits.
- */
-int32_t SkDivBits(int32_t numer, int32_t denom, int shift);
-
-/**
  *  Return the integer square root of value, with a bias of bitBias
  */
 int32_t SkSqrtBits(int32_t value, int bitBias);
@@ -72,7 +65,7 @@ int32_t SkSqrtBits(int32_t value, int bitBias);
 int SkCLZ_portable(uint32_t);
 
 #ifndef SkCLZ
-    #if defined(_MSC_VER) && _MSC_VER >= 1400
+    #if defined(_MSC_VER)
         #include <intrin.h>
 
         static inline int SkCLZ(uint32_t mask) {
@@ -150,39 +143,11 @@ static inline int SkNextLog2(uint32_t value) {
  *  Returns true if value is a power of 2. Does not explicitly check for
  *  value <= 0.
  */
-static inline bool SkIsPow2(int value) {
+template <typename T> inline bool SkIsPow2(T value) {
     return (value & (value - 1)) == 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-
-/**
- *  SkMulS16(a, b) multiplies a * b, but requires that a and b are both int16_t.
- *  With this requirement, we can generate faster instructions on some
- *  architectures.
- */
-#ifdef SK_ARM_HAS_EDSP
-    static inline int32_t SkMulS16(S16CPU x, S16CPU y) {
-        SkASSERT((int16_t)x == x);
-        SkASSERT((int16_t)y == y);
-        int32_t product;
-        asm("smulbb %0, %1, %2 \n"
-            : "=r"(product)
-            : "r"(x), "r"(y)
-            );
-        return product;
-    }
-#else
-    #ifdef SK_DEBUG
-        static inline int32_t SkMulS16(S16CPU x, S16CPU y) {
-            SkASSERT((int16_t)x == x);
-            SkASSERT((int16_t)y == y);
-            return x * y;
-        }
-    #else
-        #define SkMulS16(x, y)  ((x) * (y))
-    #endif
-#endif
 
 /**
  *  Return a*b/((1 << shift) - 1), rounding any fractional bits.
@@ -192,7 +157,7 @@ static inline unsigned SkMul16ShiftRound(U16CPU a, U16CPU b, int shift) {
     SkASSERT(a <= 32767);
     SkASSERT(b <= 32767);
     SkASSERT(shift > 0 && shift <= 8);
-    unsigned prod = SkMulS16(a, b) + (1 << (shift - 1));
+    unsigned prod = a*b + (1 << (shift - 1));
     return (prod + (prod >> shift)) >> shift;
 }
 
@@ -203,7 +168,7 @@ static inline unsigned SkMul16ShiftRound(U16CPU a, U16CPU b, int shift) {
 static inline U8CPU SkMulDiv255Round(U16CPU a, U16CPU b) {
     SkASSERT(a <= 32767);
     SkASSERT(b <= 32767);
-    unsigned prod = SkMulS16(a, b) + 128;
+    unsigned prod = a*b + 128;
     return (prod + (prod >> 8)) >> 8;
 }
 

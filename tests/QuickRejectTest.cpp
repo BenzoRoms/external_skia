@@ -17,7 +17,7 @@ class TestLooper : public SkDrawLooper {
 public:
 
     SkDrawLooper::Context* createContext(SkCanvas*, void* storage) const override {
-        return SkNEW_PLACEMENT(storage, TestDrawLooperContext);
+        return new (storage) TestDrawLooperContext;
     }
 
     size_t contextSize() const override { return sizeof(TestDrawLooperContext); }
@@ -49,7 +49,7 @@ private:
     };
 };
 
-SkFlattenable* TestLooper::CreateProc(SkReadBuffer&) { return SkNEW(TestLooper); }
+sk_sp<SkFlattenable> TestLooper::CreateProc(SkReadBuffer&) { return sk_make_sp<TestLooper>(); }
 
 static void test_drawBitmap(skiatest::Reporter* reporter) {
     SkBitmap src;
@@ -82,7 +82,7 @@ static void test_drawBitmap(skiatest::Reporter* reporter) {
     // to the left. The test is to ensure that canvas' quickReject machinary
     // allows us through, even though sans-looper we would look like we should
     // be clipped out.
-    paint.setLooper(new TestLooper)->unref();
+    paint.setLooper(sk_make_sp<TestLooper>());
     canvas.drawBitmap(src, SkIntToScalar(-10), 0, &paint);
     REPORTER_ASSERT(reporter, 0xFFFFFFFF == *dst.getAddr32(5, 5));
 }
@@ -98,7 +98,7 @@ static void test_layers(skiatest::Reporter* reporter) {
 
     // Test that saveLayer updates quickReject
     SkRect bounds = SkRect::MakeLTRB(50, 50, 70, 70);
-    canvas.saveLayer(&bounds, NULL);
+    canvas.saveLayer(&bounds, nullptr);
     REPORTER_ASSERT(reporter, true == canvas.quickReject(SkRect::MakeWH(10, 10)));
     REPORTER_ASSERT(reporter, false == canvas.quickReject(SkRect::MakeWH(60, 60)));
 }

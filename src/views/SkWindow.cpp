@@ -16,18 +16,13 @@
 
 SkWindow::SkWindow()
     : fSurfaceProps(SkSurfaceProps::kLegacyFontHost_InitType)
-    , fFocusView(NULL)
+    , fFocusView(nullptr)
 {
     fClicks.reset();
     fWaitingOnInval = false;
-
-#ifdef SK_BUILD_FOR_WINCE
-    fColorType = kRGB_565_SkColorType;
-#else
-    fColorType = kN32_SkColorType;
-#endif
-
     fMatrix.reset();
+
+    fBitmap.allocN32Pixels(0, 0);
 }
 
 SkWindow::~SkWindow() {
@@ -37,13 +32,14 @@ SkWindow::~SkWindow() {
 
 SkSurface* SkWindow::createSurface() {
     const SkBitmap& bm = this->getBitmap();
-    return SkSurface::NewRasterDirect(bm.info(), bm.getPixels(), bm.rowBytes(), &fSurfaceProps);
+    return SkSurface::MakeRasterDirect(bm.info(), bm.getPixels(), bm.rowBytes(),
+                                       &fSurfaceProps).release();
 }
 
 void SkWindow::setMatrix(const SkMatrix& matrix) {
     if (fMatrix != matrix) {
         fMatrix = matrix;
-        this->inval(NULL);
+        this->inval(nullptr);
     }
 }
 
@@ -59,22 +55,28 @@ void SkWindow::postConcat(const SkMatrix& matrix) {
     this->setMatrix(m);
 }
 
-void SkWindow::setColorType(SkColorType ct) {
-    this->resize(fBitmap.width(), fBitmap.height(), ct);
+void SkWindow::resize(const SkImageInfo& info) {
+    if (fBitmap.info() != info) {
+        fBitmap.allocPixels(info);
+        this->inval(nullptr);
+    }
+    this->setSize(SkIntToScalar(fBitmap.width()), SkIntToScalar(fBitmap.height()));
 }
 
-void SkWindow::resize(int width, int height, SkColorType ct) {
-    if (ct == kUnknown_SkColorType)
-        ct = fColorType;
+void SkWindow::resize(int width, int height) {
+    this->resize(fBitmap.info().makeWH(width, height));
+}
 
-    if (width != fBitmap.width() || height != fBitmap.height() || ct != fColorType) {
-        fColorType = ct;
-        fBitmap.allocPixels(SkImageInfo::Make(width, height,
-                                              ct, kPremul_SkAlphaType));
+void SkWindow::setColorType(SkColorType ct, SkColorProfileType pt) {
+    const SkImageInfo& info = fBitmap.info();
+    this->resize(SkImageInfo::Make(info.width(), info.height(), ct, kPremul_SkAlphaType, pt));
 
-        this->setSize(SkIntToScalar(width), SkIntToScalar(height));
-        this->inval(NULL);
-    }
+    // Set the global flag that enables or disables "legacy" mode, depending on our format.
+    // With sRGB 32-bit or linear FP 16, we turn on gamma-correct handling of inputs:
+    SkSurfaceProps props = this->getSurfaceProps();
+    uint32_t flags = (props.flags() & ~SkSurfaceProps::kGammaCorrect_Flag) |
+        (SkColorAndProfileAreGammaCorrect(ct, pt) ? SkSurfaceProps::kGammaCorrect_Flag : 0);
+    this->setSurfaceProps(SkSurfaceProps(flags, props.pixelGeometry()));
 }
 
 bool SkWindow::handleInval(const SkRect* localR) {
@@ -105,37 +107,19 @@ void SkWindow::forceInvalAll() {
                       SkScalarCeilToInt(this->height()));
 }
 
-#if defined(SK_BUILD_FOR_WINCE) && defined(USE_GX_SCREEN)
-    #include <windows.h>
-    #include <gx.h>
-    extern GXDisplayProperties gDisplayProps;
-#endif
-
 #ifdef SK_SIMULATE_FAILED_MALLOC
 extern bool gEnableControlledThrow;
 #endif
 
 bool SkWindow::update(SkIRect* updateArea) {
     if (!fDirtyRgn.isEmpty()) {
-        SkBitmap bm = this->getBitmap();
-
-#if defined(SK_BUILD_FOR_WINCE) && defined(USE_GX_SCREEN)
-        char* buffer = (char*)GXBeginDraw();
-        SkASSERT(buffer);
-
-        RECT    rect;
-        GetWindowRect((HWND)((SkOSWindow*)this)->getHWND(), &rect);
-        buffer += rect.top * gDisplayProps.cbyPitch + rect.left * gDisplayProps.cbxPitch;
-
-        bm.setPixels(buffer);
-#endif
-
         SkAutoTUnref<SkSurface> surface(this->createSurface());
         SkCanvas* canvas = surface->getCanvas();
 
         canvas->clipRegion(fDirtyRgn);
-        if (updateArea)
+        if (updateArea) {
             *updateArea = fDirtyRgn.getBounds();
+        }
 
         SkAutoCanvasRestore acr(canvas, true);
         canvas->concat(fMatrix);
@@ -160,10 +144,6 @@ bool SkWindow::update(SkIRect* updateArea) {
         gEnableControlledThrow = false;
 #endif
 
-#if defined(SK_BUILD_FOR_WINCE) && defined(USE_GX_SCREEN)
-        GXEndDraw();
-#endif
-
         return true;
     }
     return false;
@@ -174,7 +154,7 @@ bool SkWindow::handleChar(SkUnichar uni) {
         return true;
 
     SkView* focus = this->getFocusView();
-    if (focus == NULL)
+    if (focus == nullptr)
         focus = this;
 
     SkEvent evt(SK_EventType_Unichar);
@@ -192,7 +172,7 @@ bool SkWindow::handleKey(SkKey key) {
     // send an event to the focus-view
     {
         SkView* focus = this->getFocusView();
-        if (focus == NULL)
+        if (focus == nullptr)
             focus = this;
 
         SkEvent evt(SK_EventType_Key);
@@ -202,8 +182,8 @@ bool SkWindow::handleKey(SkKey key) {
     }
 
     if (key == kUp_SkKey || key == kDown_SkKey) {
-        if (this->moveFocus(key == kUp_SkKey ? kPrev_FocusDirection : kNext_FocusDirection) == NULL)
-            this->onSetFocusView(NULL);
+        if (this->moveFocus(key == kUp_SkKey ? kPrev_FocusDirection : kNext_FocusDirection) == nullptr)
+            this->onSetFocusView(nullptr);
         return true;
     }
     return false;
@@ -219,7 +199,7 @@ bool SkWindow::handleKeyUp(SkKey key) {
     //send an event to the focus-view
     {
         SkView* focus = this->getFocusView();
-        if (focus == NULL)
+        if (focus == nullptr)
             focus = this;
 
         //should this one be the same?
@@ -237,7 +217,7 @@ void SkWindow::addMenu(SkOSMenu* menu) {
 }
 
 void SkWindow::setTitle(const char title[]) {
-    if (NULL == title) {
+    if (nullptr == title) {
         title = "";
     }
     fTitle.set(title);
@@ -344,6 +324,7 @@ bool SkWindow::onDispatchClick(int x, int y, Click::State state,
 
 #if SK_SUPPORT_GPU
 
+#include "GrContext.h"
 #include "gl/GrGLInterface.h"
 #include "gl/GrGLUtil.h"
 #include "SkGr.h"
@@ -353,7 +334,20 @@ GrRenderTarget* SkWindow::renderTarget(const AttachmentInfo& attachmentInfo,
     GrBackendRenderTargetDesc desc;
     desc.fWidth = SkScalarRoundToInt(this->width());
     desc.fHeight = SkScalarRoundToInt(this->height());
-    desc.fConfig = kSkia8888_GrPixelConfig;
+    // TODO: Query the actual framebuffer for sRGB capable. However, to
+    // preserve old (fake-linear) behavior, we don't do this. Instead, rely
+    // on the flag (currently driven via 'C' mode in SampleApp).
+    //
+    // Also, we may not have real sRGB support (ANGLE, in particular), so check for
+    // that, and fall back to L32:
+    //
+    // ... and, if we're using a 10-bit/channel FB0, it doesn't do sRGB conversion on write,
+    // so pretend that it's non-sRGB 8888:
+    desc.fConfig =
+        grContext->caps()->srgbSupport() &&
+        SkImageInfoIsGammaCorrect(info()) &&
+        (attachmentInfo.fColorBits != 30)
+        ? kSkiaGamma8888_GrPixelConfig : kSkia8888_GrPixelConfig;
     desc.fOrigin = kBottomLeft_GrSurfaceOrigin;
     desc.fSampleCnt = attachmentInfo.fSampleCount;
     desc.fStencilBits = attachmentInfo.fStencilBits;

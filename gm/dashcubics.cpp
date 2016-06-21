@@ -14,43 +14,27 @@
 /*
  *  Inspired by http://code.google.com/p/chromium/issues/detail?id=112145
  */
+static void flower(SkCanvas* canvas, const SkPath& path, SkScalar intervals[2],
+                   SkPaint::Join join) {
+    SkPaint paint;
+    paint.setAntiAlias(true);
+    paint.setStyle(SkPaint::kStroke_Style);
+    paint.setStrokeJoin(join);
+    paint.setStrokeWidth(42);
+    canvas->drawPath(path, paint);
 
-class DashCubicsGM : public skiagm::GM {
-public:
-    DashCubicsGM() {}
+    paint.setColor(SK_ColorRED);
+    paint.setStrokeWidth(21);
+    paint.setPathEffect(SkDashPathEffect::Make(intervals, 2, 0));
+    canvas->drawPath(path, paint);
 
-protected:
+    paint.setColor(SK_ColorGREEN);
+    paint.setPathEffect(nullptr);
+    paint.setStrokeWidth(0);
+    canvas->drawPath(path, paint);
+}
 
-    virtual SkString onShortName() {
-        return SkString("dashcubics");
-    }
-
-    virtual SkISize onISize() {
-        return SkISize::Make(860, 700);
-    }
-
-    void flower(SkCanvas* canvas, const SkPath& path, SkScalar intervals[2], SkPaint::Join join) {
-        SkPathEffect* pe = SkDashPathEffect::Create(intervals, 2, 0);
-
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setStyle(SkPaint::kStroke_Style);
-        paint.setStrokeJoin(join);
-        paint.setStrokeWidth(42);
-        canvas->drawPath(path, paint);
-
-        paint.setColor(SK_ColorRED);
-        paint.setStrokeWidth(21);
-        paint.setPathEffect(pe)->unref();
-        canvas->drawPath(path, paint);
-
-        paint.setColor(SK_ColorGREEN);
-        paint.setPathEffect(NULL);
-        paint.setStrokeWidth(0);
-        canvas->drawPath(path, paint);
-    }
-
-    virtual void onDraw(SkCanvas* canvas) {
+DEF_SIMPLE_GM(dashcubics, canvas, 865, 750) {
         SkPath path;
         const char* d = "M 337,98 C 250,141 250,212 250,212 C 250,212 250,212 250,212"
         "C 250,212 250,212 250,212 C 250,212 250,141 163,98 C 156,195 217,231 217,231"
@@ -73,13 +57,4 @@ protected:
                 canvas->restore();
             }
         }
-    }
-
-private:
-    typedef GM INHERITED;
-};
-
-//////////////////////////////////////////////////////////////////////////////
-
-static skiagm::GM* MyFactory(void*) { return new DashCubicsGM; }
-static skiagm::GMRegistry reg(MyFactory);
+}

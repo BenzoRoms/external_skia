@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -46,16 +45,8 @@ public:
     SkPDFGlyphSetMap();
     ~SkPDFGlyphSetMap();
 
-    class F2BIter {
-    public:
-        explicit F2BIter(const SkPDFGlyphSetMap& map);
-        const FontGlyphSetPair* next() const;
-        void reset(const SkPDFGlyphSetMap& map);
-
-    private:
-        const SkTDArray<FontGlyphSetPair>* fMap;
-        mutable int fIndex;
-    };
+    const FontGlyphSetPair* begin() const { return fMap.begin(); }
+    const FontGlyphSetPair* end() const { return fMap.end(); }
 
     void merge(const SkPDFGlyphSetMap& usage);
     void reset();
@@ -78,11 +69,11 @@ private:
     reference to each instantiated class.
 */
 class SkPDFFont : public SkPDFDict {
-    SK_DECLARE_INST_COUNT(SkPDFFont)
+
 public:
     virtual ~SkPDFFont();
 
-    /** Returns the typeface represented by this class. Returns NULL for the
+    /** Returns the typeface represented by this class. Returns nullptr for the
      *  default typeface.
      */
     SkTypeface* typeface();
@@ -133,7 +124,7 @@ public:
     /** Subset the font based on usage set. Returns a SkPDFFont instance with
      *  subset.
      *  @param usage  Glyph subset requested.
-     *  @return       NULL if font does not support subsetting, a new instance
+     *  @return       nullptr if font does not support subsetting, a new instance
      *                of SkPDFFont otherwise.
      */
     virtual SkPDFFont* getFontSubset(const SkPDFGlyphSet* usage);
@@ -148,6 +139,12 @@ public:
                          uint16_t existingGlyphID,
                          uint32_t searchFontID,
                          uint16_t searchGlyphID);
+
+    /**
+     *  Return false iff the typeface has its NotEmbeddable flag set.
+     *  If typeface is NULL, the default typeface is checked.
+     */
+    static bool CanEmbedTypeface(SkTypeface*, SkPDFCanon*);
 
 protected:
     // Common constructor to handle common members.
@@ -175,7 +172,7 @@ protected:
     void adjustGlyphRangeForSingleByteEncoding(uint16_t glyphID);
 
     // Generate ToUnicode table according to glyph usage subset.
-    // If subset is NULL, all available glyph ids will be used.
+    // If subset is nullptr, all available glyph ids will be used.
     void populateToUnicodeTable(const SkPDFGlyphSet* subset);
 
     // Create instances of derived types based on fontInfo.
@@ -187,15 +184,17 @@ protected:
 
     static bool Find(uint32_t fontID, uint16_t glyphID, int* index);
 
+    void drop() override;
+
 private:
-    SkAutoTUnref<SkTypeface> fTypeface;
+    sk_sp<SkTypeface> fTypeface;
 
     // The glyph IDs accessible with this font.  For Type1 (non CID) fonts,
     // this will be a subset if the font has more than 255 glyphs.
     uint16_t fFirstGlyphID;
     uint16_t fLastGlyphID;
-    SkAutoTUnref<const SkAdvancedTypefaceMetrics> fFontInfo;
-    SkAutoTUnref<SkPDFDict> fDescriptor;
+    sk_sp<const SkAdvancedTypefaceMetrics> fFontInfo;
+    sk_sp<SkPDFDict> fDescriptor;
 
     SkAdvancedTypefaceMetrics::FontType fFontType;
 

@@ -21,9 +21,14 @@ public:
         kNativeGL_BackEndType,
     };
 
-    void    detach();
-    bool    attach(SkBackEndTypes attachType, int msaaSampleCount, AttachmentInfo*);
+    void    release();
+    bool    attach(SkBackEndTypes attachType, int msaaSampleCount, bool deepColor,
+                   AttachmentInfo*);
     void    present();
+
+    bool makeFullscreen() { return true; }
+    void closeWindow() { /* Not impl yet */ }
+    void setVsync(bool) { /* Can't turn off vsync? */ }
 
 protected:
     // overrides from SkEventSink

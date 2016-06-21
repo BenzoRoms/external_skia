@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -10,6 +9,7 @@
 #include "SkCanvas.h"
 #include "SkColorPriv.h"
 #include "SkPaint.h"
+#include "SkPath.h"
 #include "SkRandom.h"
 #include "SkShader.h"
 #include "SkString.h"
@@ -65,7 +65,7 @@ protected:
         return fName.c_str();
     }
 
-    void onDraw(const int loops, SkCanvas*) override {
+    void onDraw(int loops, SkCanvas*) override {
         if (fRaw) {
             for (int i = 0; i < loops; ++i) {
                 SkPath::RawIter iter(fPath);

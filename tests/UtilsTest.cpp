@@ -14,7 +14,7 @@
 
 class RefClass : public SkRefCnt {
 public:
-    SK_DECLARE_INST_COUNT(RefClass)
+
 
     RefClass(int n) : fN(n) {}
     int get() const { return fN; }
@@ -33,10 +33,10 @@ static void test_autounref(skiatest::Reporter* reporter) {
     REPORTER_ASSERT(reporter, &obj == tmp.get());
     REPORTER_ASSERT(reporter, obj.unique());
 
-    REPORTER_ASSERT(reporter, &obj == tmp.detach());
+    REPORTER_ASSERT(reporter, &obj == tmp.release());
     REPORTER_ASSERT(reporter, obj.unique());
-    REPORTER_ASSERT(reporter, NULL == tmp.detach());
-    REPORTER_ASSERT(reporter, NULL == tmp.get());
+    REPORTER_ASSERT(reporter, nullptr == tmp.release());
+    REPORTER_ASSERT(reporter, nullptr == tmp.get());
 
     obj.ref();
     REPORTER_ASSERT(reporter, !obj.unique());

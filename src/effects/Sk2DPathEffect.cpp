@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2006 The Android Open Source Project
  *
@@ -12,6 +11,7 @@
 #include "SkWriteBuffer.h"
 #include "SkPath.h"
 #include "SkRegion.h"
+#include "SkStrokeRec.h"
 
 Sk2DPathEffect::Sk2DPathEffect(const SkMatrix& mat) : fMatrix(mat) {
     fMatrixIsInvertible = mat.invert(&fInverse);
@@ -106,11 +106,11 @@ void SkLine2DPathEffect::nextSpan(int u, int v, int ucount, SkPath* dst) const {
     }
 }
 
-SkFlattenable* SkLine2DPathEffect::CreateProc(SkReadBuffer& buffer) {
+sk_sp<SkFlattenable> SkLine2DPathEffect::CreateProc(SkReadBuffer& buffer) {
     SkMatrix matrix;
     buffer.readMatrix(&matrix);
     SkScalar width = buffer.readScalar();
-    return SkLine2DPathEffect::Create(width, matrix);
+    return SkLine2DPathEffect::Make(width, matrix);
 }
 
 void SkLine2DPathEffect::flatten(SkWriteBuffer &buffer) const {
@@ -134,12 +134,12 @@ SkPath2DPathEffect::SkPath2DPathEffect(const SkMatrix& m, const SkPath& p)
     : INHERITED(m), fPath(p) {
 }
 
-SkFlattenable* SkPath2DPathEffect::CreateProc(SkReadBuffer& buffer) {
+sk_sp<SkFlattenable> SkPath2DPathEffect::CreateProc(SkReadBuffer& buffer) {
     SkMatrix matrix;
     buffer.readMatrix(&matrix);
     SkPath path;
     buffer.readPath(&path);
-    return SkPath2DPathEffect::Create(matrix, path);
+    return SkPath2DPathEffect::Make(matrix, path);
 }
 
 void SkPath2DPathEffect::flatten(SkWriteBuffer& buffer) const {

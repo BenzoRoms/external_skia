@@ -24,7 +24,7 @@ SkTestFont::SkTestFont(const SkTestFontData& fontData)
     , fWidths(fontData.fWidths)
     , fMetrics(fontData.fMetrics)
     , fName(fontData.fName)
-    , fPaths(NULL)
+    , fPaths(nullptr)
 {
     init(fontData.fPoints, fontData.fVerbs);
 #ifdef SK_DEBUG
@@ -35,14 +35,14 @@ SkTestFont::SkTestFont(const SkTestFontData& fontData)
 
 SkTestFont::~SkTestFont() {
     for (unsigned index = 0; index < fCharCodesCount; ++index) {
-        SkDELETE(fPaths[index]);
+        delete fPaths[index];
     }
-    SkDELETE_ARRAY(fPaths);
+    delete[] fPaths;
 }
 
 #ifdef SK_DEBUG
 
-#include "SkThread.h"
+#include "SkMutex.h"
 SK_DECLARE_STATIC_MUTEX(gUsedCharsMutex);
 
 #endif
@@ -78,9 +78,9 @@ int SkTestFont::codeToIndex(SkUnichar charCode) const {
 }
 
 void SkTestFont::init(const SkScalar* pts, const unsigned char* verbs) {
-    fPaths = SkNEW_ARRAY(SkPath*, fCharCodesCount);
+    fPaths = new SkPath* [fCharCodesCount];
     for (unsigned index = 0; index < fCharCodesCount; ++index) {
-        SkPath* path = SkNEW(SkPath);
+        SkPath* path = new SkPath;
         SkPath::Verb verb;
         while ((verb = (SkPath::Verb) *verbs++) != SkPath::kDone_Verb) {
             switch (verb) {
@@ -108,6 +108,8 @@ void SkTestFont::init(const SkScalar* pts, const unsigned char* verbs) {
                     return;
             }
         }
+        // This should make SkPath::getBounds() queries threadsafe.
+        path->updateBoundsCache();
         fPaths[index] = path;
     }
 }
@@ -118,7 +120,8 @@ SkTestTypeface::SkTestTypeface(SkTestFont* testFont, const SkFontStyle& style)
 }
 
 void SkTestTypeface::getAdvance(SkGlyph* glyph) {
-    glyph->fAdvanceX = fTestFont->fWidths[glyph->getGlyphID()];
+    // TODO(benjaminwagner): Update users to use floats.
+    glyph->fAdvanceX = SkFixedToFloat(fTestFont->fWidths[glyph->getGlyphID()]);
     glyph->fAdvanceY = 0;
 }
 
@@ -127,7 +130,8 @@ void SkTestTypeface::getFontMetrics(SkPaint::FontMetrics* metrics) {
 }
 
 void SkTestTypeface::getMetrics(SkGlyph* glyph) {
-    glyph->fAdvanceX = fTestFont->fWidths[glyph->getGlyphID()];
+    // TODO(benjaminwagner): Update users to use floats.
+    glyph->fAdvanceX = SkFixedToFloat(fTestFont->fWidths[glyph->getGlyphID()]);
     glyph->fAdvanceY = 0;
 }
 
@@ -137,7 +141,6 @@ void SkTestTypeface::getPath(const SkGlyph& glyph, SkPath* path) {
 
 void SkTestTypeface::onFilterRec(SkScalerContextRec* rec) const {
     rec->setHinting(SkPaint::kNo_Hinting);
-    rec->fMaskFormat = SkMask::kA8_Format;
 }
 
 SkAdvancedTypefaceMetrics* SkTestTypeface::onGetAdvancedTypefaceMetrics(
@@ -146,17 +149,8 @@ SkAdvancedTypefaceMetrics* SkTestTypeface::onGetAdvancedTypefaceMetrics(
                                 uint32_t glyphIDsCount) const {
 // pdf only
     SkAdvancedTypefaceMetrics* info = new SkAdvancedTypefaceMetrics;
-    info->fEmSize = 0;
-    info->fLastGlyphID = SkToU16(onCountGlyphs() - 1);
-    info->fStyle = 0;
     info->fFontName.set(fTestFont->fName);
-    info->fType = SkAdvancedTypefaceMetrics::kOther_Font;
-    info->fItalicAngle = 0;
-    info->fAscent = 0;
-    info->fDescent = 0;
-    info->fStemV = 0;
-    info->fCapHeight = 0;
-    info->fBBox = SkIRect::MakeEmpty();
+    info->fLastGlyphID = SkToU16(onCountGlyphs() - 1);
     return info;
 }
 
@@ -183,14 +177,15 @@ SkTypeface::LocalizedStrings* SkTestTypeface::onCreateFamilyNameIterator() const
     SkString familyName(fTestFont->fName);
     SkString language("und"); //undetermined
 SkASSERT(0);  // incomplete
-    return NULL;
+    return nullptr;
 //     return new SkOTUtils::LocalizedStrings_SingleName(familyName, language);
 }
 
 class SkTestScalerContext : public SkScalerContext {
 public:
-    SkTestScalerContext(SkTestTypeface* face, const SkDescriptor* desc)
-        : SkScalerContext(face, desc)
+    SkTestScalerContext(SkTestTypeface* face, const SkScalerContextEffects& effects,
+                        const SkDescriptor* desc)
+        : SkScalerContext(face, effects, desc)
         , fFace(face)
     {
         fRec.getSingleMatrix(&fMatrix);
@@ -214,19 +209,19 @@ protected:
     void generateAdvance(SkGlyph* glyph) override {
         fFace->getAdvance(glyph);
 
-        const SkVector advance = fMatrix.mapXY(SkFixedToScalar(glyph->fAdvanceX),
-                                               SkFixedToScalar(glyph->fAdvanceY));
-        glyph->fAdvanceX = SkScalarToFixed(advance.fX);
-        glyph->fAdvanceY = SkScalarToFixed(advance.fY);
+        const SkVector advance = fMatrix.mapXY(SkFloatToScalar(glyph->fAdvanceX),
+                                               SkFloatToScalar(glyph->fAdvanceY));
+        glyph->fAdvanceX = SkScalarToFloat(advance.fX);
+        glyph->fAdvanceY = SkScalarToFloat(advance.fY);
     }
 
     void generateMetrics(SkGlyph* glyph) override {
         fFace->getMetrics(glyph);
 
-        const SkVector advance = fMatrix.mapXY(SkFixedToScalar(glyph->fAdvanceX),
-                                               SkFixedToScalar(glyph->fAdvanceY));
-        glyph->fAdvanceX = SkScalarToFixed(advance.fX);
-        glyph->fAdvanceY = SkScalarToFixed(advance.fY);
+        const SkVector advance = fMatrix.mapXY(SkFloatToScalar(glyph->fAdvanceX),
+                                               SkFloatToScalar(glyph->fAdvanceY));
+        glyph->fAdvanceX = SkScalarToFloat(advance.fX);
+        glyph->fAdvanceY = SkScalarToFloat(advance.fY);
 
         SkPath path;
         fFace->getPath(*glyph, &path);
@@ -243,7 +238,6 @@ protected:
         glyph->fTop = ibounds.fTop;
         glyph->fWidth = ibounds.width();
         glyph->fHeight = ibounds.height();
-        glyph->fMaskFormat = SkMask::kARGB32_Format;
     }
 
     void generateImage(const SkGlyph& glyph) override {
@@ -290,6 +284,7 @@ private:
     SkMatrix         fMatrix;
 };
 
-SkScalerContext* SkTestTypeface::onCreateScalerContext(const SkDescriptor* desc) const {
-    return SkNEW_ARGS(SkTestScalerContext, (const_cast<SkTestTypeface*>(this), desc));
+SkScalerContext* SkTestTypeface::onCreateScalerContext(const SkScalerContextEffects& effects,
+                                                       const SkDescriptor* desc) const {
+    return new SkTestScalerContext(const_cast<SkTestTypeface*>(this), effects, desc);
 }

@@ -24,6 +24,14 @@ SkRasterClip::SkRasterClip(const SkRasterClip& src) {
     SkDEBUGCODE(this->validate();)
 }
 
+SkRasterClip::SkRasterClip(const SkRegion& rgn) : fBW(rgn) {
+    fForceConservativeRects = false;
+    fIsBW = true;
+    fIsEmpty = this->computeIsEmpty();  // bounds might be empty, so compute
+    fIsRect = !fIsEmpty;
+    SkDEBUGCODE(this->validate();)
+}
+
 SkRasterClip::SkRasterClip(const SkIRect& bounds, bool forceConservativeRects) : fBW(bounds) {
     fForceConservativeRects = forceConservativeRects;
     fIsBW = true;
@@ -42,6 +50,22 @@ SkRasterClip::SkRasterClip(bool forceConservativeRects) {
 
 SkRasterClip::~SkRasterClip() {
     SkDEBUGCODE(this->validate();)
+}
+
+bool SkRasterClip::operator==(const SkRasterClip& other) const {
+    // This impl doesn't care if fForceConservativeRects is the same in both, only the current state
+
+    if (fIsBW != other.fIsBW) {
+        return false;
+    }
+    bool isEqual = fIsBW ? fBW == other.fBW : fAA == other.fAA;
+#ifdef SK_DEBUG
+    if (isEqual) {
+        SkASSERT(fIsEmpty == other.fIsEmpty);
+        SkASSERT(fIsRect == other.fIsRect);
+    }
+#endif
+    return isEqual;
 }
 
 bool SkRasterClip::isComplex() const {
@@ -161,10 +185,19 @@ bool SkRasterClip::setPath(const SkPath& path, const SkRegion& clip, bool doAA) 
     return this->updateCacheAndReturnNonEmpty();
 }
 
-bool SkRasterClip::op(const SkPath& path, const SkISize& size, SkRegion::Op op, bool doAA) {
-    // base is used to limit the size (and therefore memory allocation) of the
-    // region that results from scan converting devPath.
-    SkRegion base;
+bool SkRasterClip::op(const SkRRect& rrect, const SkIRect& bounds, SkRegion::Op op, bool doAA) {
+    if (fForceConservativeRects) {
+        return this->op(rrect.getBounds(), bounds, op, doAA);
+    }
+
+    SkPath path;
+    path.addRRect(rrect);
+
+    return this->op(path, bounds, op, doAA);
+}
+
+bool SkRasterClip::op(const SkPath& path, const SkIRect& bounds, SkRegion::Op op, bool doAA) {
+    AUTO_RASTERCLIP_VALIDATE(*this);
 
     if (fForceConservativeRects) {
         SkIRect ir;
@@ -172,7 +205,7 @@ bool SkRasterClip::op(const SkPath& path, const SkISize& size, SkRegion::Op op, 
             case kDoNothing_MutateResult:
                 return !this->isEmpty();
             case kReplaceClippedAgainstGlobalBounds_MutateResult:
-                ir = SkIRect::MakeSize(size);
+                ir = bounds;
                 break;
             case kContinue_MutateResult:
                 ir = path.getBounds().roundOut();
@@ -180,6 +213,10 @@ bool SkRasterClip::op(const SkPath& path, const SkISize& size, SkRegion::Op op, 
         }
         return this->op(ir, op);
     }
+
+    // base is used to limit the size (and therefore memory allocation) of the
+    // region that results from scan converting devPath.
+    SkRegion base;
 
     if (SkRegion::kIntersect_Op == op) {
         // since we are intersect, we can do better (tighter) with currRgn's
@@ -197,8 +234,8 @@ bool SkRasterClip::op(const SkPath& path, const SkISize& size, SkRegion::Op op, 
             return this->op(clip, op);
         }
     } else {
-        base.setRect(0, 0, size.width(), size.height());
-        
+        base.setRect(bounds);
+
         if (SkRegion::kReplace_Op == op) {
             return this->setPath(path, base, doAA);
         } else {
@@ -272,7 +309,7 @@ static bool nearly_integral(SkScalar x) {
     return x - SkScalarFloorToScalar(x) < domain;
 }
 
-bool SkRasterClip::op(const SkRect& r, const SkISize& size, SkRegion::Op op, bool doAA) {
+bool SkRasterClip::op(const SkRect& r, const SkIRect& bounds, SkRegion::Op op, bool doAA) {
     AUTO_RASTERCLIP_VALIDATE(*this);
 
     if (fForceConservativeRects) {
@@ -281,7 +318,7 @@ bool SkRasterClip::op(const SkRect& r, const SkISize& size, SkRegion::Op op, boo
             case kDoNothing_MutateResult:
                 return !this->isEmpty();
             case kReplaceClippedAgainstGlobalBounds_MutateResult:
-                ir = SkIRect::MakeSize(size);
+                ir = bounds;
                 break;
             case kContinue_MutateResult:
                 ir = r.roundOut();
@@ -289,7 +326,7 @@ bool SkRasterClip::op(const SkRect& r, const SkISize& size, SkRegion::Op op, boo
         }
         return this->op(ir, op);
     }
-    
+
     if (fIsBW && doAA) {
         // check that the rect really needs aa, or is it close enought to
         // integer boundaries that we can just treat it as a BW rect?
@@ -313,7 +350,7 @@ bool SkRasterClip::op(const SkRect& r, const SkISize& size, SkRegion::Op op, boo
 }
 
 void SkRasterClip::translate(int dx, int dy, SkRasterClip* dst) const {
-    if (NULL == dst) {
+    if (nullptr == dst) {
         return;
     }
 
@@ -356,13 +393,13 @@ const SkRegion& SkRasterClip::forceGetBW() {
 
 void SkRasterClip::convertToAA() {
     AUTO_RASTERCLIP_VALIDATE(*this);
-    
+
     SkASSERT(!fForceConservativeRects);
-    
+
     SkASSERT(fIsBW);
     fAA.setRegion(fBW);
     fIsBW = false;
-    
+
     // since we are being explicitly asked to convert-to-aa, we pass false so we don't "optimize"
     // ourselves back to BW.
     (void)this->updateCacheAndReturnNonEmpty(false);
@@ -386,8 +423,8 @@ void SkRasterClip::validate() const {
 ///////////////////////////////////////////////////////////////////////////////
 
 SkAAClipBlitterWrapper::SkAAClipBlitterWrapper() {
-    SkDEBUGCODE(fClipRgn = NULL;)
-    SkDEBUGCODE(fBlitter = NULL;)
+    SkDEBUGCODE(fClipRgn = nullptr;)
+    SkDEBUGCODE(fBlitter = nullptr;)
 }
 
 SkAAClipBlitterWrapper::SkAAClipBlitterWrapper(const SkRasterClip& clip,

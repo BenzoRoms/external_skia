@@ -74,8 +74,7 @@ protected:
         c->restore();
 
         if (recordPicture) {
-            SkAutoTUnref<SkPicture> picture(recorder.endRecording());
-            canvas->drawPicture(picture);
+            canvas->drawPicture(recorder.finishRecordingAsPicture());
         }
 
         return pics;
@@ -113,11 +112,11 @@ public:
     }
 
 protected:
-    virtual bool isSuitableFor(Backend backend) {
+    bool isSuitableFor(Backend backend) override {
         return backend == kNonRendering_Backend;
     }
 
-    virtual void onDraw(const int loops, SkCanvas*) {
+    void onDraw(int loops, SkCanvas*) override {
         SkIPoint canvasSize = onGetSize();
         SkPictureRecorder recorder;
 
@@ -125,7 +124,7 @@ protected:
             SkCanvas* c = recorder.beginRecording(SkIntToScalar(canvasSize.x()),
                                                   SkIntToScalar(canvasSize.y()));
             this->doDraw(c);
-            SkAutoTUnref<SkPicture> picture(recorder.endRecording());
+            (void)recorder.finishRecordingAsPicture();
         }
     }
 
@@ -139,8 +138,8 @@ public:
         : INHERITED("playback", maxLevel, maxPictureLevel) {
     }
 protected:
-    void onPreDraw() override {
-        this->INHERITED::onPreDraw();
+    void onDelayedSetup() override {
+        this->INHERITED::onDelayedSetup();
 
         SkIPoint canvasSize = onGetSize();
         SkPictureRecorder recorder;
@@ -148,17 +147,17 @@ protected:
                                               SkIntToScalar(canvasSize.y()));
 
         this->doDraw(c);
-        fPicture.reset(recorder.endRecording());
+        fPicture = recorder.finishRecordingAsPicture();
     }
 
-    virtual void onDraw(const int loops, SkCanvas* canvas) {
+    void onDraw(int loops, SkCanvas* canvas) override {
         for (int i = 0; i < loops; i++) {
             canvas->drawPicture(fPicture);
         }
     }
 
 private:
-    SkAutoTUnref<SkPicture> fPicture;
+    sk_sp<SkPicture> fPicture;
 
     typedef PictureNesting INHERITED;
 };

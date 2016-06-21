@@ -13,7 +13,7 @@
 
 /** This benchmark tests rendering rotated rectangles. It can optionally apply AA and/or change the
     paint color between each rect in different ways using the ColorType enum. The xfermode used can
-    be specified as well. 
+    be specified as well.
   */
 
 enum ColorType {
@@ -77,7 +77,7 @@ public:
 protected:
     const char* onGetName() override { return fName.c_str(); }
 
-    void onDraw(const int loops, SkCanvas* canvas) override {
+    void onDraw(int loops, SkCanvas* canvas) override {
         SkPaint paint;
         paint.setAntiAlias(fAA);
         paint.setXfermodeMode(fMode);

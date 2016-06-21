@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -22,7 +21,7 @@ static void test_clearonlayers(SkCanvas* canvas) {
 
     c.clipRect(rect);
 
-    c.saveLayer(NULL, NULL);
+    c.saveLayer(nullptr, nullptr);
     rect = SkRect::MakeXYWH(50, 10, 40, 80);
     c.clipRect(rect, SkRegion::kUnion_Op);
 
@@ -262,7 +261,7 @@ class DrawView : public SkView {
     SkTDArray<Draw*> fList;
 
 public:
-    DrawView() : fDraw(NULL) {
+    DrawView() : fDraw(nullptr) {
         fFactory = new RectFactory;
     }
 
@@ -289,7 +288,7 @@ public:
                 return *iter;
             }
         }
-        return NULL;
+        return nullptr;
     }
 
 protected:
@@ -344,7 +343,7 @@ protected:
                 } else {
                     fDraw->unref();
                 }
-                fDraw = NULL;
+                fDraw = nullptr;
             }
             return true;
         }
@@ -365,7 +364,7 @@ protected:
                 }
             }
         }
-        this->inval(NULL);
+        this->inval(nullptr);
         return true;
     }
 

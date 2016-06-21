@@ -5,10 +5,10 @@
  * found in the LICENSE file.
  */
 #include "Test.h"
+#include "SkTemplates.h"
+#include <utility>
 
 namespace {
-template <class T> T&& Move(T& o) { return static_cast<T&&>(o); }
-
 class Moveable {
 public:
     Moveable() {}
@@ -18,9 +18,13 @@ private:
     Moveable(const Moveable&);
     Moveable& operator=(const Moveable&);
 };
+template <typename T> void deleter(T*) { }
+template <typename T> struct Deleter {
+    void operator()(T* t) { delete static_cast<const Moveable*>(t); }
+};
 } // namespace
 
 DEF_TEST(CPlusPlusEleven_RvalueAndMove, r) {
-    Moveable src1; Moveable dst1(Move(src1));
-    Moveable src2, dst2; dst2 = Move(src2);
+    Moveable src1; Moveable dst1(std::move(src1));
+    Moveable src2, dst2; dst2 = std::move(src2);
 }

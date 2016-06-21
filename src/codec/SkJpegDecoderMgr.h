@@ -10,12 +10,8 @@
 
 #include "SkCodec.h"
 #include "SkCodecPriv.h"
-#include "SkJpegUtility.h"
-#include "SkSwizzler.h"
-#include "SkTemplates.h"
-
-// stdio is needed for jpeglib
 #include <stdio.h>
+#include "SkJpegUtility.h"
 
 extern "C" {
     #include "jpeglib.h"
@@ -47,9 +43,10 @@ public:
     void  init();
 
     /*
-     * Recommend a color type based on the encoded format
+     * Returns true if it successfully sets outColor to the encoded color,
+     * and false otherwise.
      */
-    SkColorType getColorType();
+    bool getEncodedColor(SkEncodedInfo::Color* outColor);
 
     /*
      * Free memory used by the decode manager

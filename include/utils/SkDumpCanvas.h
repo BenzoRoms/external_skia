@@ -10,7 +10,7 @@
 
 #include "SkCanvas.h"
 
-#ifdef SK_DEVELOPER
+#ifdef SK_DEBUG
 
 /** This class overrides all the draw methods on SkCanvas, and formats them
     as text, and then sends that to a Dumper helper object.
@@ -48,10 +48,7 @@ public:
         kDrawVertices_Verb,
         kDrawPatch_Verb,
         kDrawData_Verb, // obsolete
-
-        kBeginCommentGroup_Verb,
-        kAddComment_Verb,
-        kEndCommentGroup_Verb,
+        kDrawAnnotation_Verb,
 
         kCull_Verb
     };
@@ -61,7 +58,7 @@ public:
      */
     class Dumper : public SkRefCnt {
     public:
-        SK_DECLARE_INST_COUNT(Dumper)
+        
 
         virtual void dump(SkDumpCanvas*, SkDumpCanvas::Verb, const char str[],
                           const SkPaint*) = 0;
@@ -75,13 +72,9 @@ public:
 
     int getNestLevel() const { return fNestLevel; }
 
-    void beginCommentGroup(const char* description) override;
-    void addComment(const char* kywd, const char* value) override;
-    void endCommentGroup() override;
-
 protected:
     void willSave() override;
-    SaveLayerStrategy willSaveLayer(const SkRect*, const SkPaint*, SaveFlags) override;
+    SaveLayerStrategy getSaveLayerStrategy(const SaveLayerRec&) override;
     void willRestore() override;
 
     void didConcat(const SkMatrix&) override;
@@ -110,13 +103,12 @@ protected:
     void onDrawPath(const SkPath&, const SkPaint&) override;
     void onDrawBitmap(const SkBitmap&, SkScalar left, SkScalar top, const SkPaint*) override;
     void onDrawBitmapRect(const SkBitmap&, const SkRect* src, const SkRect& dst, const SkPaint*,
-                          DrawBitmapRectFlags flags) override;
+                          SrcRectConstraint) override;
     void onDrawImage(const SkImage*, SkScalar left, SkScalar top, const SkPaint*) override;
     void onDrawImageRect(const SkImage*, const SkRect* src, const SkRect& dst,
-                         const SkPaint*) override;
+                         const SkPaint*, SrcRectConstraint) override;
     void onDrawBitmapNine(const SkBitmap&, const SkIRect& center, const SkRect& dst,
                           const SkPaint*) override;
-    void onDrawSprite(const SkBitmap&, int left, int top, const SkPaint*) override;
     void onDrawVertices(VertexMode vmode, int vertexCount,
                         const SkPoint vertices[], const SkPoint texs[],
                         const SkColor colors[], SkXfermode* xmode,
@@ -129,6 +121,7 @@ protected:
     void onClipRegion(const SkRegion&, SkRegion::Op) override;
 
     void onDrawPicture(const SkPicture*, const SkMatrix*, const SkPaint*) override;
+    void onDrawAnnotation(const SkRect&, const char key[], SkData* value) override;
 
     static const char* EdgeStyleToAAString(ClipEdgeStyle edgeStyle);
 

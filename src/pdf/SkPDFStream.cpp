@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2010 Google Inc.
  *
@@ -8,63 +7,63 @@
 
 
 #include "SkData.h"
-#include "SkFlate.h"
+#include "SkDeflate.h"
 #include "SkPDFStream.h"
 #include "SkStream.h"
 #include "SkStreamPriv.h"
 
-SkPDFStream::SkPDFStream(SkStream* stream) : fState(kUnused_State) {
-    this->setData(stream);
-}
-
-SkPDFStream::SkPDFStream(SkData* data) : fState(kUnused_State) {
-    this->setData(data);
-}
-
 SkPDFStream::~SkPDFStream() {}
+
+void SkPDFStream::drop() {
+    fCompressedData.reset(nullptr);
+    this->SkPDFDict::drop();
+}
 
 void SkPDFStream::emitObject(SkWStream* stream,
                              const SkPDFObjNumMap& objNumMap,
-                             const SkPDFSubstituteMap& substitutes) {
-    if (fState == kUnused_State) {
-        fState = kNoCompression_State;
-        SkDynamicMemoryWStream compressedData;
-
-        SkAssertResult(
-                SkFlate::Deflate(fDataStream.get(), &compressedData));
-        SkAssertResult(fDataStream->rewind());
-        if (compressedData.getOffset() < this->dataSize()) {
-            SkAutoTDelete<SkStream> compressed(
-                    compressedData.detachAsStream());
-            this->setData(compressed.get());
-            this->insertName("Filter", "FlateDecode");
-        }
-        fState = kCompressed_State;
-        this->insertInt("Length", this->dataSize());
-    }
+                             const SkPDFSubstituteMap& substitutes) const {
+    SkASSERT(fCompressedData);
     this->INHERITED::emitObject(stream, objNumMap, substitutes);
+    // duplicate (a cheap operation) preserves const on fCompressedData.
+    std::unique_ptr<SkStreamRewindable> dup(fCompressedData->duplicate());
+    SkASSERT(dup);
+    SkASSERT(dup->hasLength());
     stream->writeText(" stream\n");
-    stream->writeStream(fDataStream.get(), fDataStream->getLength());
-    SkAssertResult(fDataStream->rewind());
+    stream->writeStream(dup.get(), dup->getLength());
     stream->writeText("\nendstream");
 }
 
-SkPDFStream::SkPDFStream() : fState(kUnused_State) {}
-
-void SkPDFStream::setData(SkData* data) {
-    // FIXME: Don't swap if the data is the same.
-    fDataStream.reset(SkNEW_ARGS(SkMemoryStream, (data)));
-}
 
 void SkPDFStream::setData(SkStream* stream) {
+    SkASSERT(!fCompressedData);  // Only call this function once.
     SkASSERT(stream);
-    // Code assumes that the stream starts at the beginning and is rewindable.
-    // SkStreamRewindableFromSkStream will try stream->duplicate().
-    fDataStream.reset(SkStreamRewindableFromSkStream(stream));
-    SkASSERT(fDataStream.get());
-}
+    // Code assumes that the stream starts at the beginning.
 
-size_t SkPDFStream::dataSize() const {
-    SkASSERT(fDataStream->hasLength());
-    return fDataStream->getLength();
+    #ifdef SK_PDF_LESS_COMPRESSION
+    std::unique_ptr<SkStreamRewindable> duplicate(stream->duplicate());
+    if (duplicate && duplicate->hasLength()) {
+        this->insertInt("Length", duplicate->getLength());
+        fCompressedData.reset(duplicate.release());
+        return;
+    }
+    #endif
+
+    SkDynamicMemoryWStream compressedData;
+    SkDeflateWStream deflateWStream(&compressedData);
+    SkStreamCopy(&deflateWStream, stream);
+    deflateWStream.finalize();
+    size_t length = compressedData.bytesWritten();
+
+    if (stream->hasLength()) {
+        std::unique_ptr<SkStreamRewindable> dup(stream->duplicate());
+        if (dup && dup->hasLength() &&
+            dup->getLength() <= length + strlen("/Filter_/FlateDecode_")) {
+            this->insertInt("Length", dup->getLength());
+            fCompressedData.reset(dup.release());
+            return;
+        }
+    }
+    fCompressedData.reset(compressedData.detachAsStream());
+    this->insertName("Filter", "FlateDecode");
+    this->insertInt("Length", length);
 }

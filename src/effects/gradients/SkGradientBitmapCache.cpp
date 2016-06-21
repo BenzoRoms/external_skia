@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2010 Google Inc.
  *
@@ -18,8 +17,8 @@ struct SkGradientBitmapCache::Entry {
     SkBitmap    fBitmap;
 
     Entry(const void* buffer, size_t size, const SkBitmap& bm)
-            : fPrev(NULL),
-              fNext(NULL),
+            : fPrev(nullptr),
+              fNext(nullptr),
               fBitmap(bm) {
         fBuffer = sk_malloc_throw(size);
         fSize = size;
@@ -35,7 +34,7 @@ struct SkGradientBitmapCache::Entry {
 
 SkGradientBitmapCache::SkGradientBitmapCache(int max) : fMaxEntries(max) {
     fEntryCount = 0;
-    fHead = fTail = NULL;
+    fHead = fTail = nullptr;
 
     this->validate();
 }
@@ -51,7 +50,7 @@ SkGradientBitmapCache::~SkGradientBitmapCache() {
     }
 }
 
-SkGradientBitmapCache::Entry* SkGradientBitmapCache::detach(Entry* entry) const {
+SkGradientBitmapCache::Entry* SkGradientBitmapCache::release(Entry* entry) const {
     if (entry->fPrev) {
         SkASSERT(fHead != entry);
         entry->fPrev->fNext = entry->fNext;
@@ -70,7 +69,7 @@ SkGradientBitmapCache::Entry* SkGradientBitmapCache::detach(Entry* entry) const 
 }
 
 void SkGradientBitmapCache::attachToHead(Entry* entry) const {
-    entry->fPrev = NULL;
+    entry->fPrev = nullptr;
     entry->fNext = fHead;
     if (fHead) {
         fHead->fPrev = entry;
@@ -90,7 +89,7 @@ bool SkGradientBitmapCache::find(const void* buffer, size_t size, SkBitmap* bm) 
                 *bm = entry->fBitmap;
             }
             // move to the head of our list, so we purge it last
-            this->detach(entry);
+            this->release(entry);
             this->attachToHead(entry);
             return true;
         }
@@ -104,11 +103,11 @@ void SkGradientBitmapCache::add(const void* buffer, size_t len, const SkBitmap& 
 
     if (fEntryCount == fMaxEntries) {
         SkASSERT(fTail);
-        delete this->detach(fTail);
+        delete this->release(fTail);
         fEntryCount -= 1;
     }
 
-    Entry* entry = SkNEW_ARGS(Entry, (buffer, len, bm));
+    Entry* entry = new Entry(buffer, len, bm);
     this->attachToHead(entry);
     fEntryCount += 1;
 }
@@ -121,8 +120,8 @@ void SkGradientBitmapCache::validate() const {
     SkASSERT(fEntryCount >= 0 && fEntryCount <= fMaxEntries);
 
     if (fEntryCount > 0) {
-        SkASSERT(NULL == fHead->fPrev);
-        SkASSERT(NULL == fTail->fNext);
+        SkASSERT(nullptr == fHead->fPrev);
+        SkASSERT(nullptr == fTail->fNext);
 
         if (fEntryCount == 1) {
             SkASSERT(fHead == fTail);
@@ -145,8 +144,8 @@ void SkGradientBitmapCache::validate() const {
         }
         SkASSERT(0 == count);
     } else {
-        SkASSERT(NULL == fHead);
-        SkASSERT(NULL == fTail);
+        SkASSERT(nullptr == fHead);
+        SkASSERT(nullptr == fTail);
     }
 }
 

@@ -15,7 +15,7 @@ static inline int is_ws(int c)
 
 static size_t linebreak(const char text[], const char stop[],
                         const SkPaint& paint, SkScalar margin,
-                        size_t* trailing = NULL)
+                        size_t* trailing = nullptr)
 {
     size_t lengthBreak = paint.breakText(text, stop - text, margin);
 
@@ -300,4 +300,3 @@ SkTextBlob* SkTextBox::snapshotTextBlob(SkScalar* computedBottom) const {
     }
     return (SkTextBlob*)visitor.fBuilder.build();
 }
-

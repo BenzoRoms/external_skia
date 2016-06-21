@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2006 The Android Open Source Project
  *
@@ -6,20 +5,21 @@
  * found in the LICENSE file.
  */
 
-
 #ifndef SkTypeface_DEFINED
 #define SkTypeface_DEFINED
 
+#include "../private/SkOnce.h"
+#include "../private/SkWeakRefCnt.h"
 #include "SkFontStyle.h"
-#include "SkLazyPtr.h"
 #include "SkRect.h"
 #include "SkString.h"
-#include "SkWeakRefCnt.h"
 
 class SkDescriptor;
+class SkFontData;
 class SkFontDescriptor;
 class SkScalerContext;
 struct SkScalerContextRec;
+struct SkScalerContextEffects;
 class SkStream;
 class SkStreamAsset;
 class SkAdvancedTypefaceMetrics;
@@ -40,8 +40,6 @@ typedef uint32_t SkFontTableTag;
 */
 class SK_API SkTypeface : public SkWeakRefCnt {
 public:
-    SK_DECLARE_INST_COUNT(SkTypeface)
-
     /** Style specifies the intrinsic style attributes of a given typeface
     */
     enum Style {
@@ -94,62 +92,92 @@ public:
      */
     static bool Equal(const SkTypeface* facea, const SkTypeface* faceb);
 
-    /**
-     *  Returns a ref() to the default typeface. The caller must call unref()
-     *  when they are done referencing the object. Never returns NULL.
-     */
-    static SkTypeface* RefDefault(Style style = SkTypeface::kNormal);
+    /** Returns the default typeface, which is never nullptr. */
+    static sk_sp<SkTypeface> MakeDefault(Style style = SkTypeface::kNormal);
+#ifdef SK_SUPPORT_LEGACY_TYPEFACE_PTR
+    static SkTypeface* RefDefault(Style style = SkTypeface::kNormal) {
+        return MakeDefault(style).release();
+    }
+#endif
 
-    /** Return a new reference to the typeface that most closely matches the
-        requested familyName and style. Pass null as the familyName to return
-        the default font for the requested style. Will never return null
+    /** Return the typeface that most closely matches the requested familyName and style.
+        Pass nullptr as the familyName to request the default font for the requested style.
+        Will never return nullptr.
 
         @param familyName  May be NULL. The name of the font family.
         @param style       The style (normal, bold, italic) of the typeface.
-        @return reference to the closest-matching typeface. Call must call
-                unref() when they are done.
+        @return the closest-matching typeface.
     */
-    static SkTypeface* CreateFromName(const char familyName[], Style style);
+    static sk_sp<SkTypeface> MakeFromName(const char familyName[], Style style);
+#ifdef SK_SUPPORT_LEGACY_TYPEFACE_PTR
+    static SkTypeface* CreateFromName(const char familyName[], Style style) {
+        return MakeFromName(familyName, style).release();
+    }
+#endif
 
-    /** Return a new reference to the typeface that most closely matches the
-        requested typeface and specified Style. Use this call if you want to
-        pick a new style from the same family of the existing typeface.
-        If family is NULL, this selects from the default font's family.
+    /** Return the typeface that most closely matches the requested typeface and style.
+        Use this to pick a new style from the same family of the existing typeface.
+        If family is nullptr, this selects from the default font's family.
 
         @param family  May be NULL. The name of the existing type face.
         @param s       The style (normal, bold, italic) of the type face.
-        @return reference to the closest-matching typeface. Call must call
-                unref() when they are done.
+        @return the closest-matching typeface.
     */
-    static SkTypeface* CreateFromTypeface(const SkTypeface* family, Style s);
+    static sk_sp<SkTypeface> MakeFromTypeface(SkTypeface* family, Style);
+#ifdef SK_SUPPORT_LEGACY_TYPEFACE_PTR
+    static SkTypeface* CreateFromTypeface(const SkTypeface* family, Style style) {
+        return MakeFromTypeface(const_cast<SkTypeface*>(family), style).release();
+    }
+#endif
 
     /** Return a new typeface given a file. If the file does not exist, or is
-        not a valid font file, returns null.
+        not a valid font file, returns nullptr.
     */
-    static SkTypeface* CreateFromFile(const char path[], int index = 0);
+    static sk_sp<SkTypeface> MakeFromFile(const char path[], int index = 0);
+#ifdef SK_SUPPORT_LEGACY_TYPEFACE_PTR
+    static SkTypeface* CreateFromFile(const char path[], int index = 0) {
+        return MakeFromFile(path, index).release();
+    }
+#endif
 
     /** Return a new typeface given a stream. If the stream is
-        not a valid font file, returns null. Ownership of the stream is
+        not a valid font file, returns nullptr. Ownership of the stream is
         transferred, so the caller must not reference it again.
     */
-    static SkTypeface* CreateFromStream(SkStreamAsset* stream, int index = 0);
+    static sk_sp<SkTypeface> MakeFromStream(SkStreamAsset* stream, int index = 0);
+#ifdef SK_SUPPORT_LEGACY_TYPEFACE_PTR
+    static SkTypeface* CreateFromStream(SkStreamAsset* stream, int index = 0) {
+        return MakeFromStream(stream, index).release();
+    }
+#endif
+
+    /** Return a new typeface given font data and configuration. If the data
+        is not valid font data, returns nullptr. Ownership of the font data is
+        transferred, so the caller must not reference it again.
+    */
+    static sk_sp<SkTypeface> MakeFromFontData(SkFontData*);
+#ifdef SK_SUPPORT_LEGACY_TYPEFACE_PTR
+    static SkTypeface* CreateFromFontData(SkFontData* fd) {
+        return MakeFromFontData(fd).release();
+    }
+#endif
 
     /** Write a unique signature to a stream, sufficient to reconstruct a
         typeface referencing the same font when Deserialize is called.
      */
     void serialize(SkWStream*) const;
 
-    /** Like serialize, but write the whole font (not just a signature) if possible.
-     */
-    void serializeForcingEmbedding(SkWStream*) const;
-
     /** Given the data previously written by serialize(), return a new instance
-        to a typeface referring to the same font. If that font is not available,
-        return null. If an instance is returned, the caller is responsible for
-        calling unref() when they are done with it.
+        of a typeface referring to the same font. If that font is not available,
+        return nullptr.
         Does not affect ownership of SkStream.
      */
-    static SkTypeface* Deserialize(SkStream*);
+    static sk_sp<SkTypeface> MakeDeserialize(SkStream*);
+#ifdef SK_SUPPORT_LEGACY_TYPEFACE_PTR
+    static SkTypeface* Deserialize(SkStream* stream) {
+        return MakeDeserialize(stream).release();
+    }
+#endif
 
     enum Encoding {
         kUTF8_Encoding,
@@ -258,7 +286,7 @@ public:
     public:
         virtual ~LocalizedStrings() { }
         virtual bool next(LocalizedString* localizedString) = 0;
-        void unref() { SkDELETE(this); }
+        void unref() { delete this; }
     };
     /**
      *  Returns an iterator which will attempt to enumerate all of the
@@ -284,11 +312,17 @@ public:
     SkStreamAsset* openStream(int* ttcIndex) const;
 
     /**
+     *  Return the font data, or NULL on failure.
+     *  The caller is responsible for deleting the font data.
+     */
+    SkFontData* createFontData() const;
+
+    /**
      *  Return a scalercontext for the given descriptor. If this fails, then
      *  if allowFailure is true, this returns NULL, else it returns a
      *  dummy scalercontext that will not crash, but will draw nothing.
      */
-    SkScalerContext* createScalerContext(const SkDescriptor*,
+    SkScalerContext* createScalerContext(const SkScalerContextEffects&, const SkDescriptor*,
                                          bool allowFailure = false) const;
 
     /**
@@ -329,7 +363,8 @@ protected:
     friend class SkScalerContext;
     static SkTypeface* GetDefaultTypeface(Style style = SkTypeface::kNormal);
 
-    virtual SkScalerContext* onCreateScalerContext(const SkDescriptor*) const = 0;
+    virtual SkScalerContext* onCreateScalerContext(const SkScalerContextEffects&,
+                                                   const SkDescriptor*) const = 0;
     virtual void onFilterRec(SkScalerContextRec*) const = 0;
     virtual SkAdvancedTypefaceMetrics* onGetAdvancedTypefaceMetrics(
                         PerGlyphInfo,
@@ -337,6 +372,9 @@ protected:
                         uint32_t glyphIDsCount) const = 0;
 
     virtual SkStreamAsset* onOpenStream(int* ttcIndex) const = 0;
+    // TODO: make pure virtual.
+    virtual SkFontData* onCreateFontData() const;
+
     virtual void onGetFontDescriptor(SkFontDescriptor*, bool* isLocal) const = 0;
 
     virtual int onCharsToGlyphs(const void* chars, Encoding, uint16_t glyphs[],
@@ -363,6 +401,7 @@ protected:
 
 private:
     friend class SkGTypeface;
+    friend class SkRandomTypeface;
     friend class SkPDFFont;
     friend class SkPDFCIDFont;
     friend class GrPathRendering;
@@ -384,15 +423,10 @@ private:
                           uint32_t glyphIDsCount = 0) const;
 
 private:
-    static SkTypeface* CreateDefault(int style);  // SkLazyPtr requires an int, not a Style.
-    static void        DeleteDefault(SkTypeface*);
-
-    struct BoundsComputer;
-//    friend struct BoundsComputer;
-
-    SkLazyPtr<SkRect>   fLazyBounds;
     SkFontID            fUniqueID;
     SkFontStyle         fStyle;
+    mutable SkRect      fBounds;
+    mutable SkOnce      fBoundsOnce;
     bool                fIsFixedPitch;
 
     friend class SkPaint;

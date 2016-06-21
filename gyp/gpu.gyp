@@ -14,7 +14,7 @@
         'sources/': [ ['exclude', '_mac.(h|cpp|m|mm)$'],
         ],
       }],
-      ['skia_os != "linux" and skia_os != "chromeos"', {
+      ['skia_os != "linux"', {
         'sources/': [ ['exclude', '_glx.(h|cpp)$'],
         ],
       }],
@@ -94,6 +94,7 @@
       ],
       'include_dirs': [
         '../include/gpu',
+        '../include/private',
         '../src/core',
         '../src/gpu',
         '../src/image/',
@@ -101,37 +102,16 @@
       'sources': [
         '<@(skgpu_sources)',
         '<@(skgpu_native_gl_sources)',
-        '<@(skgpu_angle_gl_sources)',
-        '<@(skgpu_mesa_gl_sources)',
-        '<@(skgpu_debug_gl_sources)',
-        '<@(skgpu_null_gl_sources)',
+        '<@(skgpu_vk_sources)',
         'gpu.gypi', # Makes the gypi appear in IDEs (but does not modify the build).
       ],
       'conditions': [
         [ 'skia_gpu_extra_dependency_path', {
           'dependencies' : [
               '<(skia_gpu_extra_dependency_path):*',
-          ]
-        }],
-        [ 'skia_stroke_path_rendering', {
-          'sources': [
-            '../experimental/StrokePathRenderer/GrStrokePathRenderer.h',
-            '../experimental/StrokePathRenderer/GrStrokePathRenderer.cpp',
           ],
-          'defines': [
-            'GR_STROKE_PATH_RENDERING=1',
-          ],
-        }],
-        [ 'skia_android_path_rendering', {
-          'sources': [
-            '../experimental/AndroidPathRenderer/GrAndroidPathRenderer.cpp',
-            '../experimental/AndroidPathRenderer/GrAndroidPathRenderer.h',
-            '../experimental/AndroidPathRenderer/AndroidPathRenderer.cpp',
-            '../experimental/AndroidPathRenderer/AndroidPathRenderer.h',
-            '../experimental/AndroidPathRenderer/Vertex.h',
-          ],
-          'defines': [
-            'GR_ANDROID_PATH_RENDERING=1',
+          'export_dependent_settings': [
+            '<(skia_gpu_extra_dependency_path):*',
           ],
         }],
         [ 'skia_chrome_utils', {
@@ -143,13 +123,13 @@
             'GR_CHROME_UTILS=1',
           ],
         }],
-        [ 'skia_os == "linux" or skia_os == "chromeos"', {
+        [ 'skia_os == "linux"', {
           'sources!': [
             '../src/gpu/gl/GrGLDefaultInterface_none.cpp',
             '../src/gpu/gl/GrGLCreateNativeInterface_none.cpp',
           ],
         }],
-        [ '(skia_os == "linux" or skia_os == "chromeos") and skia_egl == 1', {
+        [ 'skia_os == "linux" and skia_egl == 1', {
           'link_settings': {
             'libraries': [
               '-lEGL',
@@ -157,29 +137,12 @@
             ],
           },
         }],
-        [ '(skia_os == "linux" or skia_os == "chromeos") and skia_egl == 0', {
+        [ 'skia_os == "linux" and skia_egl == 0', {
           'link_settings': {
             'libraries': [
               '-lGL',
               '-lGLU',
               '-lX11',
-            ],
-          },
-        }],
-        [ 'skia_egl == 1', {
-          'defines': [
-            'SK_EGL=1',
-          ],
-        }],
-        [ 'skia_egl == 0', {
-          'defines': [
-            'SK_EGL=0',
-          ],
-        }],
-        [ 'skia_mesa and skia_os == "linux"', {
-          'link_settings': {
-            'libraries': [
-              '-lOSMesa',
             ],
           },
         }],
@@ -194,38 +157,10 @@
             '../src/gpu/gl/GrGLCreateNativeInterface_none.cpp',
           ],
         }],
-        [ 'not skia_mesa', {
-          'sources!': [
-            '../src/gpu/gl/mesa/SkMesaGLContext.cpp',
-            '../src/gpu/gl/mesa/GrGLCreateMesaInterface.cpp',
-          ],
-        }],
-        [ 'skia_mesa and skia_os == "mac"', {
-          'link_settings': {
-            'libraries': [
-              '/opt/X11/lib/libOSMesa.dylib',
-            ],
-          },
-          'include_dirs': [
-             '/opt/X11/include/',
-          ],
-        }],
         [ 'skia_os in ["win", "ios"]', {
           'sources!': [
             '../src/gpu/gl/GrGLDefaultInterface_none.cpp',
             '../src/gpu/gl/GrGLCreateNativeInterface_none.cpp',
-          ],
-        }],
-        [ 'skia_angle', {
-          'dependencies': [
-            'angle.gyp:*',
-          ],
-          'export_dependent_settings': [
-            'angle.gyp:*',
-          ],
-        }, { # not skia_angle
-          'sources!': [
-            '<@(skgpu_angle_gl_sources)',
           ],
         }],
         [ 'skia_os == "android"', {
@@ -242,6 +177,55 @@
               '-lEGL',
             ],
           },
+        }],
+        [ 'skia_vulkan', {
+          'conditions': [
+            [ 'skia_os == "win"', {
+             'variables': {
+                'vulkan_lib_name': '-lvulkan-1',
+                'vulkan_sdk_path' : '<!(echo %VK_SDK_PATH%)',
+              },
+              'include_dirs': [
+                '<(vulkan_sdk_path)/Include',
+              ],
+              'direct_dependent_settings': {
+                'include_dirs': [
+                  '<(vulkan_sdk_path)/Include',
+                ],
+              },
+              'link_settings': {
+                'conditions': [
+                  [ 'skia_arch_type == "x86"', {
+                    'library_dirs': [ '<(vulkan_sdk_path)/Bin32', ],
+                  }, {
+                    'library_dirs': [ '<(vulkan_sdk_path)/Bin', ],
+                  }],
+                ]
+              },
+            }, {
+              'variables': {
+                'vulkan_lib_name': '-lvulkan',
+              },
+            }],
+          ],
+          'dependencies': [
+            'shaderc.gyp:shaderc_combined',
+          ],
+          'include_dirs': [
+            '../third_party/externals/shaderc2/libshaderc/include',
+          ],
+          'direct_dependent_settings': {
+            'include_dirs': [
+              '../third_party/externals/shaderc2/libshaderc/include',
+            ],
+          },
+          'link_settings': {
+            'libraries': [ '<(vulkan_lib_name)', ],
+          },
+        }, {
+          'sources!': [
+            '<@(skgpu_vk_sources)',
+          ],
         }],
       ],
     },

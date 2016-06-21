@@ -19,14 +19,14 @@ struct PictureOverheadBench : public Benchmark {
     }
     bool isSuitableFor(Backend backend) override { return backend == kNonRendering_Backend; }
 
-    void onDraw(const int loops, SkCanvas*) override {
+    void onDraw(int loops, SkCanvas*) override {
         SkPictureRecorder rec;
         for (int i = 0; i < loops; i++) {
             rec.beginRecording(SkRect::MakeWH(2000,3000));
             if (kDraw) {
                 rec.getRecordingCanvas()->drawRect(SkRect::MakeXYWH(10, 10, 1000, 1000), SkPaint());
             }
-            SkAutoTUnref<SkPicture> pic(rec.endRecordingAsPicture());
+            (void)rec.finishRecordingAsPicture();
         }
     }
 };
