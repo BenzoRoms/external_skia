@@ -8,8 +8,9 @@
 #ifndef SkImageSource_DEFINED
 #define SkImageSource_DEFINED
 
-#include "SkImage.h"
 #include "SkImageFilter.h"
+
+class SkImage;
 
 class SK_API SkImageSource : public SkImageFilter {
 public:
