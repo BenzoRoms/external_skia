@@ -554,17 +554,26 @@ LOCAL_SRC_FILES := \
 	src/image/SkSurface_Gpu.cpp \
 	src/gpu/gl/GrGLDefaultInterface_native.cpp \
 	src/gpu/gl/android/GrGLCreateNativeInterface_android.cpp \
+	src/images/bmpdecoderhelper.cpp \
 	src/images/SkForceLinking.cpp \
-	src/images/SkMovie_FactoryDefault.cpp \
-	src/images/SkWEBPImageEncoder.cpp \
-	src/images/SkJPEGImageEncoder.cpp \
-	src/images/SkPNGImageEncoder.cpp \
+	src/images/SkImageDecoder.cpp \
+	src/images/SkImageDecoder_FactoryDefault.cpp \
+	src/images/SkImageDecoder_FactoryRegistrar.cpp \
+	src/images/SkImageDecoder_wbmp.cpp \
+	src/images/SkImageDecoder_libbmp.cpp \
+	src/images/SkImageDecoder_libgif.cpp \
+	src/images/SkImageDecoder_libico.cpp \
+	src/images/SkImageDecoder_libwebp.cpp \
+	src/images/SkImageDecoder_libjpeg.cpp \
+	src/images/SkImageDecoder_libpng.cpp \
 	src/images/SkImageEncoder.cpp \
 	src/images/SkImageEncoder_Factory.cpp \
 	src/images/SkARGBImageEncoder.cpp \
 	src/images/SkJPEGWriteUtility.cpp \
 	src/images/SkMovie.cpp \
-	src/images/SkGIFMovie.cpp \
+	src/images/SkMovie_gif.cpp \
+	src/images/SkPageFlipper.cpp \
+	src/images/SkScaledBitmapSampler.cpp \
 	src/pdf/SkDeflate.cpp \
 	src/pdf/SkJpegInfo.cpp \
 	src/pdf/SkPDFBitmap.cpp \
