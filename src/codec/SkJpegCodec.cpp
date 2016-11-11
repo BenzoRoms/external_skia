@@ -301,6 +301,8 @@ SkCodec::Result SkJpegCodec::onGetPixels(const SkImageInfo& dstInfo,
         return fDecoderMgr->returnFailure("conversion_possible", kInvalidConversion);
     }
 
+    dinfo->dct_method = JDCT_IFAST;
+
     // Now, given valid output dimensions, we can start the decompress
     if (!jpeg_start_decompress(dinfo)) {
         return fDecoderMgr->returnFailure("startDecompress", kInvalidInput);
@@ -415,6 +417,8 @@ SkCodec::Result SkJpegCodec::onStartScanlineDecode(const SkImageInfo& dstInfo,
     if (!this->setOutputColorSpace(dstInfo)) {
         return kInvalidConversion;
     }
+
+    (fDecoderMgr->dinfo())->dct_method = JDCT_IFAST;
 
     // Now, given valid output dimensions, we can start the decompress
     if (!jpeg_start_decompress(fDecoderMgr->dinfo())) {
