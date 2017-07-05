@@ -269,9 +269,10 @@ bool SkBmpCodec::ReadHeader(SkStream* stream, bool inIco, SkCodec** codecOut) {
     if (inIco) {
         height /= 2;
     }
-    if (width <= 0 || height <= 0) {
-        // TODO: Decide if we want to disable really large bmps as well.
-        // https://code.google.com/p/skia/issues/detail?id=3617
+
+    // Arbitrary maximum. Matches Chromium.
+    constexpr int kMaxDim = 1 << 16;
+    if (width <= 0 || height <= 0 || width >= kMaxDim || height >= kMaxDim) {
         SkCodecPrintf("Error: invalid bitmap dimensions.\n");
         return false;
     }
@@ -459,7 +460,6 @@ bool SkBmpCodec::ReadHeader(SkStream* stream, bool inIco, SkCodec** codecOut) {
         SkCodecPrintf("Error: RLE requires valid input size.\n");
         return false;
     }
-    const size_t RLEBytes = totalBytes - offset;
 
     // Calculate the number of bytes read so far
     const uint32_t bytesRead = kBmpHeaderBytes + infoBytes + maskBytes;
@@ -519,7 +519,7 @@ bool SkBmpCodec::ReadHeader(SkStream* stream, bool inIco, SkCodec** codecOut) {
                 // Icos skip the header that contains totalBytes.
                 SkASSERT(!inIco);
                 *codecOut = new SkBmpRLECodec(imageInfo, stream, bitsPerPixel, numColors,
-                        bytesPerColor, offset - bytesRead, rowOrder, RLEBytes);
+                        bytesPerColor, offset - bytesRead, rowOrder);
                 return true;
             default:
                 SkASSERT(false);
